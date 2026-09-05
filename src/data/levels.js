@@ -32,7 +32,7 @@ export default {
       ],
       "moves": "RRRRRRRUUUUURDDDDDDDRUUUUUUUULURRRUUUL",
       "headIndex": 0,
-      "direction": "up",
+      "direction": "left",
       "head": [
         22,
         8
