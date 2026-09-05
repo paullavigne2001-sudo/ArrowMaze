@@ -18,7 +18,7 @@ export default {
       ],
       "moves": "DDRUURDDDDRRDDRDLDRDLDDDDDDD",
       "headIndex": 28,
-      "direction": "right",
+      "direction": "left",
       "head": [
         22,
         7
@@ -46,7 +46,7 @@ export default {
       ],
       "moves": "UURDRUUUUULDDDLLLLDDDRUUR",
       "headIndex": 0,
-      "direction": "right",
+      "direction": "down",
       "head": [
         12,
         17
@@ -60,7 +60,7 @@ export default {
       ],
       "moves": "DDRRDLLLULLLURUULDLDDLDDRU",
       "headIndex": 0,
-      "direction": "right",
+      "direction": "up",
       "head": [
         11,
         16
@@ -116,7 +116,7 @@ export default {
       ],
       "moves": "URUUUURULLURRRULLLLLURRRRRRDR",
       "headIndex": 29,
-      "direction": "up",
+      "direction": "right",
       "head": [
         9,
         13
@@ -130,7 +130,7 @@ export default {
       ],
       "moves": "RRRRULLURRURULUULDDDLUUUURULL",
       "headIndex": 29,
-      "direction": "up",
+      "direction": "left",
       "head": [
         0,
         14
@@ -144,7 +144,7 @@ export default {
       ],
       "moves": "DDDDDDLUUUUUUULDDDDDDDL",
       "headIndex": 23,
-      "direction": "down",
+      "direction": "left",
       "head": [
         7,
         11
@@ -172,7 +172,7 @@ export default {
       ],
       "moves": "LURRRUUUUUULDDLUULD",
       "headIndex": 0,
-      "direction": "down",
+      "direction": "right",
       "head": [
         7,
         7
@@ -186,7 +186,7 @@ export default {
       ],
       "moves": "DRRDDLULDLUUUUULDDDDDLUUUUUL",
       "headIndex": 0,
-      "direction": "right",
+      "direction": "up",
       "head": [
         2,
         6
@@ -214,7 +214,7 @@ export default {
       ],
       "moves": "DDRURRRDLLDRDLLULDDRDLDRRUU",
       "headIndex": 0,
-      "direction": "left",
+      "direction": "up",
       "head": [
         8,
         0
@@ -256,7 +256,7 @@ export default {
       ],
       "moves": "RDDRRDLDLULLLLLUUUUUULDDDDDDL",
       "headIndex": 29,
-      "direction": "up",
+      "direction": "left",
       "head": [
         30,
         9
@@ -270,7 +270,7 @@ export default {
       ],
       "moves": "UUUUULDDDDDDLUUUUUULDDDDLUUUUUUUU",
       "headIndex": 33,
-      "direction": "right",
+      "direction": "up",
       "head": [
         20,
         5
@@ -284,7 +284,7 @@ export default {
       ],
       "moves": "UUULDDDDDDDDDDDDDRRDLLDRRRR",
       "headIndex": 0,
-      "direction": "right",
+      "direction": "down",
       "head": [
         19,
         5
@@ -298,7 +298,7 @@ export default {
       ],
       "moves": "RRRRRRDLDRRURDRDLLLLDRRRDDDLLURULLDDLULDLUUR",
       "headIndex": 0,
-      "direction": "up",
+      "direction": "left",
       "head": [
         31,
         9
@@ -326,7 +326,7 @@ export default {
       ],
       "moves": "DDDDLUUUULLLDRRDLLLUUULDDDLUU",
       "headIndex": 0,
-      "direction": "right",
+      "direction": "up",
       "head": [
         32,
         8
@@ -354,7 +354,7 @@ export default {
       ],
       "moves": "UUUUULDDDDDDDDDDDDDDDDDDDRDLDR",
       "headIndex": 0,
-      "direction": "right",
+      "direction": "down",
       "head": [
         21,
         1
@@ -368,7 +368,7 @@ export default {
       ],
       "moves": "LDRRUUUURRRRDLLLDRRDLLDR",
       "headIndex": 24,
-      "direction": "down",
+      "direction": "right",
       "head": [
         39,
         4
@@ -424,7 +424,7 @@ export default {
       ],
       "moves": "LLURULURRDDRRRRULLL",
       "headIndex": 0,
-      "direction": "down",
+      "direction": "right",
       "head": [
         34,
         35
@@ -438,7 +438,7 @@ export default {
       ],
       "moves": "ULURRDDRRULURUUUUUUUUUUUULDD",
       "headIndex": 0,
-      "direction": "left",
+      "direction": "down",
       "head": [
         31,
         36
@@ -452,7 +452,7 @@ export default {
       ],
       "moves": "DDDDDDDDLLLURRUUUUUUUUUU",
       "headIndex": 24,
-      "direction": "right",
+      "direction": "up",
       "head": [
         17,
         37
@@ -494,7 +494,7 @@ export default {
       ],
       "moves": "URULURRRDLDRDRUUURRRDRRRUU",
       "headIndex": 26,
-      "direction": "right",
+      "direction": "up",
       "head": [
         14,
         39
@@ -508,7 +508,7 @@ export default {
       ],
       "moves": "DLUURRUUUUUUUUUUUUU",
       "headIndex": 0,
-      "direction": "right",
+      "direction": "up",
       "head": [
         14,
         38
@@ -564,7 +564,7 @@ export default {
       ],
       "moves": "UUUURRUUUUUULDDDDDL",
       "headIndex": 0,
-      "direction": "right",
+      "direction": "down",
       "head": [
         10,
         31
@@ -606,7 +606,7 @@ export default {
       ],
       "moves": "RDDDRUUURULLLLLLLLLDRRDL",
       "headIndex": 0,
-      "direction": "down",
+      "direction": "left",
       "head": [
         1,
         23
@@ -620,7 +620,7 @@ export default {
       ],
       "moves": "RRUURRDLDDLLDRDR",
       "headIndex": 0,
-      "direction": "down",
+      "direction": "left",
       "head": [
         3,
         18
@@ -634,7 +634,7 @@ export default {
       ],
       "moves": "RDDDDDDDDDDDDDDDDDDDDDDDDRDDDDRUUU",
       "headIndex": 0,
-      "direction": "down",
+      "direction": "left",
       "head": [
         5,
         21
@@ -718,7 +718,7 @@ export default {
       ],
       "moves": "RRRRDDRDDDDDLUUUULDDDDDRRDLLDRRD",
       "headIndex": 32,
-      "direction": "right",
+      "direction": "down",
       "head": [
         17,
         28
@@ -760,7 +760,7 @@ export default {
       ],
       "moves": "LDDDDLLLLULDDLDDDRRULURURRRRR",
       "headIndex": 0,
-      "direction": "up",
+      "direction": "right",
       "head": [
         25,
         32
@@ -788,7 +788,7 @@ export default {
       ],
       "moves": "RRUUUULDDDLLLLDRRDLLDRDLLLLURRUU",
       "headIndex": 0,
-      "direction": "down",
+      "direction": "left",
       "head": [
         35,
         27
@@ -816,7 +816,7 @@ export default {
       ],
       "moves": "UUUUUUUUUUUUUUUUUUULDDDDDDDDDDDDDDDDDDDDDDD",
       "headIndex": 0,
-      "direction": "right",
+      "direction": "down",
       "head": [
         26,
         21
@@ -830,7 +830,7 @@ export default {
       ],
       "moves": "UUUUUUUUUUUUUULDDDDDDDDDLLLDRR",
       "headIndex": 0,
-      "direction": "right",
+      "direction": "down",
       "head": [
         30,
         19
@@ -844,7 +844,7 @@ export default {
       ],
       "moves": "DRUU",
       "headIndex": 4,
-      "direction": "right",
+      "direction": "up",
       "head": [
         26,
         18
