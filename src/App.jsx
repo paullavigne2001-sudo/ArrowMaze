@@ -87,4 +87,48 @@ function ArrowMazeBoard({ level }) {
         <g className="grid-lines">
           {Array.from({ length: rows + 1 }, (_, i) => (
             <line key={`h-${i}`} x1="0" y1={i} x2={cols} y2={i} />
+          ))}          {Array.from({ length: cols + 1 }, (_, i) => (
+            <line key={`v-${i}`} x1={i} y1="0" x2={i} y2={rows} />
           ))}
+        </g>
+
+        {level.arrows.map((arrow, index) => (
+          <ArrowShape key={arrow.id ?? index} arrow={arrow} />
+        ))}
+      </svg>
+    </div>
+  )
+}
+
+function App() {
+  const level = useMemo(() => loadLevel(compactLevel), [])
+
+  const coveredCells = useMemo(
+    () => level.arrows.reduce((total, arrow) => total + arrow.path.length, 0),
+    [level],
+  )
+
+  return (
+    <main className="app">
+      <header className="app-header">
+        <div>
+          <div className="eyebrow">PUZZLE</div>
+          <h1>ArrowMaze</h1>
+        </div>
+        <div className="level-badge">NIVEAU {level.id}</div>
+      </header>
+
+      <section className="game-card">
+        <ArrowMazeBoard level={level} />
+
+        <div className="level-info">
+          <span><strong>{level.arrows.length}</strong> flèches</span>
+          <span><strong>{coveredCells}</strong> / {level.grid.rows * level.grid.cols} cases</span>
+          <span>{level.grid.rows} × {level.grid.cols}</span>
+        </div>
+      </section>
+    </main>
+  )
+}
+
+export default App
