@@ -1,22 +1,3 @@
-import { useMemo } from 'react'
-import compactLevel from './data/levels.js'
-import { loadLevel } from './game/levelLoader.js'
-import './App.css'
-
-const ARROW_COLOR = '#5ee7ff'
-
-const DIR_ANGLE = {
-  right: 0,
-  down: 90,
-  left: 180,
-  up: 270,
-  R: 0,
-  D: 90,
-  L: 180,
-  U: 270,
-}
-
-function ArrowShape({ arrow }) {
   const points = arrow.path
     .map(([row, col]) => `${col + 0.5},${row + 0.5}`)
     .join(' ')
@@ -28,7 +9,7 @@ function ArrowShape({ arrow }) {
   const [headRow, headCol] = arrow.path[headIndex]
   const direction = arrow.direction || 'right'
   const angle = DIR_ANGLE[direction] ?? 0
-  const size = 0.18
+  const size = 0.32
 
   return (
     <g className="arrow-shape">
@@ -53,7 +34,7 @@ function ArrowShape({ arrow }) {
       <circle
         cx={headCol + 0.5}
         cy={headRow + 0.5}
-        r="0.11"
+        r="0.19"
         fill={ARROW_COLOR}
         stroke="white"
         strokeWidth="0.02"
@@ -63,73 +44,3 @@ function ArrowShape({ arrow }) {
         points={`0,-${size} ${size * 1.35},${size} 0,${size * 0.48} -${size * 1.35},${size}`}
         fill={ARROW_COLOR}
         stroke="white"
-        strokeWidth="0.02"
-        strokeLinejoin="round"
-        transform={`translate(${headCol + 0.5} ${headRow + 0.5}) rotate(${angle})`}
-      />
-    </g>
-  )
-}
-
-function ArrowMazeBoard({ level }) {
-  const { rows, cols } = level.grid
-
-  return (
-    <div className="board-wrap">
-      <svg
-        className="maze-board"
-        viewBox={`0 0 ${cols} ${rows}`}
-        role="img"
-        aria-label={`Niveau ${level.id}, grille ${rows} par ${cols}`}
-      >
-        <rect x="0" y="0" width={cols} height={rows} className="board-bg" />
-
-        <g className="grid-lines">
-          {Array.from({ length: rows + 1 }, (_, i) => (
-            <line key={`h-${i}`} x1="0" y1={i} x2={cols} y2={i} />
-          ))}
-          {Array.from({ length: cols + 1 }, (_, i) => (
-            <line key={`v-${i}`} x1={i} y1="0" x2={i} y2={rows} />
-          ))}
-        </g>
-
-        {level.arrows.map((arrow, index) => (
-          <ArrowShape key={arrow.id ?? index} arrow={arrow} />
-        ))}
-      </svg>
-    </div>
-  )
-}
-
-function App() {
-  const level = useMemo(() => loadLevel(compactLevel), [])
-
-  const coveredCells = useMemo(
-    () => level.arrows.reduce((total, arrow) => total + arrow.path.length, 0),
-    [level],
-  )
-
-  return (
-    <main className="app">
-      <header className="app-header">
-        <div>
-          <div className="eyebrow">PUZZLE</div>
-          <h1>ArrowMaze</h1>
-        </div>
-        <div className="level-badge">NIVEAU {level.id}</div>
-      </header>
-
-      <section className="game-card">
-        <ArrowMazeBoard level={level} />
-
-        <div className="level-info">
-          <span><strong>{level.arrows.length}</strong> flèches</span>
-          <span><strong>{coveredCells}</strong> / {level.grid.rows * level.grid.cols} cases</span>
-          <span>{level.grid.rows} × {level.grid.cols}</span>
-        </div>
-      </section>
-    </main>
-  )
-}
-
-export default App
