@@ -29,7 +29,7 @@ function ArrowShape({ arrow }) {
   const [headRow, headCol] = arrow.path[headIndex]
   const direction = arrow.direction || 'right'
   const angle = DIR_ANGLE[direction] ?? 0
-  const size = 0.30
+  const size = 0.24
 
   return (
     <g className="arrow-shape">
@@ -37,7 +37,7 @@ function ArrowShape({ arrow }) {
         points={points}
         fill="none"
         stroke="white"
-        strokeWidth="0.50"
+        strokeWidth="0.32"
         strokeLinecap="round"
         strokeLinejoin="round"
         opacity="0.9"
@@ -46,7 +46,7 @@ function ArrowShape({ arrow }) {
         points={points}
         fill="none"
         stroke={color}
-        strokeWidth="0.34"
+        strokeWidth="0.22"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -54,10 +54,10 @@ function ArrowShape({ arrow }) {
       <circle
         cx={headCol + 0.5}
         cy={headRow + 0.5}
-        r="0.22"
+        r="0.16"
         fill={color}
         stroke="white"
-        strokeWidth="0.05"
+        strokeWidth="0.035"
       />
 
       <polygon
@@ -118,22 +118,3 @@ function App() {
       <header className="app-header">
         <div>
           <div className="eyebrow">PUZZLE</div>
-          <h1>ArrowMaze</h1>
-        </div>
-        <div className="level-badge">NIVEAU {level.id}</div>
-      </header>
-
-      <section className="game-card">
-        <ArrowMazeBoard level={level} />
-
-        <div className="level-info">
-          <span><strong>{level.arrows.length}</strong> flèches</span>
-          <span><strong>{coveredCells}</strong> / {level.grid.rows * level.grid.cols} cases</span>
-          <span>40 × 40</span>
-        </div>
-      </section>
-    </main>
-  )
-}
-
-export default App
