@@ -66,9 +66,40 @@ export function expandArrow(arrow) {
     path.push([row, col])
   }
 
+  // The arrowhead is placed at headIndex. Its direction must follow
+  // the segment immediately behind the head:
+  // - head at the start: point opposite the first move
+  // - head at the end: point in the direction of the last move
+  // This prevents a visual/gameplay mismatch between the path and the arrowhead.
+  const headIndex = Number.isInteger(arrow.headIndex)
+    ? arrow.headIndex
+    : path.length - 1
+
+  if (headIndex < 0 || headIndex >= path.length) {
+    throw new Error(`Flèche ${arrow.id ?? '?'} : headIndex hors du chemin.`)
+  }
+
+  let resolvedDirection = null
+
+  if (headIndex === 0 && path.length > 1) {
+    const firstMove = arrow.moves[0]
+    const opposite = { U: 'D', D: 'U', L: 'R', R: 'L' }
+    resolvedDirection = opposite[firstMove] ?? null
+  } else if (headIndex === path.length - 1 && path.length > 1) {
+    resolvedDirection = arrow.moves[arrow.moves.length - 1] ?? null
+  }
+
+  if (!resolvedDirection) {
+    throw new Error(
+      `Flèche ${arrow.id ?? '?'} : impossible de déterminer la direction de la tête.`
+    )
+  }
+
   return {
     ...arrow,
     path,
+    direction: resolvedDirection,
+    originalDirection: arrow.direction ?? null,
   }
 }
 
