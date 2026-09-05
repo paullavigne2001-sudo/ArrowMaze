@@ -18,7 +18,7 @@ export default {
       ],
       "moves": "DDRUURDDDDRRDDRDLDRDLDDDDDDD",
       "headIndex": 28,
-      "direction": "left",
+      "direction": "down",
       "head": [
         22,
         7
