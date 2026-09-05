@@ -83,10 +83,21 @@ export function expandArrow(arrow) {
 
   if (headIndex === 0 && path.length > 1) {
     const firstMove = arrow.moves[0]
-    const opposite = { U: 'D', D: 'U', L: 'R', R: 'L' }
+    const opposite = {
+      U: 'down',
+      D: 'up',
+      L: 'right',
+      R: 'left',
+    }
     resolvedDirection = opposite[firstMove] ?? null
   } else if (headIndex === path.length - 1 && path.length > 1) {
-    resolvedDirection = arrow.moves[arrow.moves.length - 1] ?? null
+    const names = {
+      U: 'up',
+      R: 'right',
+      D: 'down',
+      L: 'left',
+    }
+    resolvedDirection = names[arrow.moves[arrow.moves.length - 1]] ?? null
   }
 
   if (!resolvedDirection) {
@@ -178,43 +189,3 @@ export function validateLevel(level) {
       }
 
       occupied.add(key)
-    }
-  }
-
-  const expectedCells = rows * cols
-
-  if (occupied.size !== expectedCells) {
-    throw new Error(
-      `Couverture incorrecte : ${occupied.size}/${expectedCells} cases couvertes.`
-    )
-  }
-
-  return true
-}
-
-/**
- * Return the direction represented by a move.
- */
-export function getDirection(move) {
-  return DIRECTIONS[move] ? move : null
-}
-
-/**
- * Return the direction of the last movement of an expanded arrow.
- * For a one-cell arrow, use its stored direction when available.
- */
-export function getArrowDirection(arrow) {
-  if (typeof arrow.moves === 'string' && arrow.moves.length > 0) {
-    return arrow.moves[arrow.moves.length - 1]
-  }
-
-  if (VALID_DIRECTIONS.has(arrow?.direction)) {
-    return arrow.direction
-  }
-
-  return null
-}
-
-export { DIRECTIONS }
-
-export default loadLevel
