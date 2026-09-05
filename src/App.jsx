@@ -17,7 +17,6 @@ const DIR_ANGLE = {
 }
 
 function ArrowShape({ arrow }) {
-  const color = ARROW_COLOR
   const points = arrow.path
     .map(([row, col]) => `${col + 0.5},${row + 0.5}`)
     .join(' ')
@@ -45,7 +44,7 @@ function ArrowShape({ arrow }) {
       <polyline
         points={points}
         fill="none"
-        stroke={color}
+        stroke={ARROW_COLOR}
         strokeWidth="0.22"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -55,16 +54,16 @@ function ArrowShape({ arrow }) {
         cx={headCol + 0.5}
         cy={headRow + 0.5}
         r="0.16"
-        fill={color}
+        fill={ARROW_COLOR}
         stroke="white"
         strokeWidth="0.035"
       />
 
       <polygon
         points={`0,-${size} ${size * 1.35},${size} 0,${size * 0.48} -${size * 1.35},${size}`}
-        fill={color}
+        fill={ARROW_COLOR}
         stroke="white"
-        strokeWidth="0.09"
+        strokeWidth="0.035"
         strokeLinejoin="round"
         transform={`translate(${headCol + 0.5} ${headRow + 0.5}) rotate(${angle})`}
       />
@@ -95,10 +94,7 @@ function ArrowMazeBoard({ level }) {
         </g>
 
         {level.arrows.map((arrow, index) => (
-          <ArrowShape
-            key={arrow.id ?? index}
-            arrow={arrow}
-          />
+          <ArrowShape key={arrow.id ?? index} arrow={arrow} />
         ))}
       </svg>
     </div>
@@ -118,3 +114,22 @@ function App() {
       <header className="app-header">
         <div>
           <div className="eyebrow">PUZZLE</div>
+          <h1>ArrowMaze</h1>
+        </div>
+        <div className="level-badge">NIVEAU {level.id}</div>
+      </header>
+
+      <section className="game-card">
+        <ArrowMazeBoard level={level} />
+
+        <div className="level-info">
+          <span><strong>{level.arrows.length}</strong> flèches</span>
+          <span><strong>{coveredCells}</strong> / {level.grid.rows * level.grid.cols} cases</span>
+          <span>{level.grid.rows} × {level.grid.cols}</span>
+        </div>
+      </section>
+    </main>
+  )
+}
+
+export default App
