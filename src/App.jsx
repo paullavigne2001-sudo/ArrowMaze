@@ -3,11 +3,7 @@ import compactLevel from './data/levels.js'
 import { loadLevel } from './game/levelLoader.js'
 import './App.css'
 
-const COLORS = [
-  '#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e',
-  '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1',
-  '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e',
-]
+const ARROW_COLOR = '#5ee7ff'
 
 const DIR_ANGLE = {
   right: 0,
@@ -20,8 +16,8 @@ const DIR_ANGLE = {
   U: 270,
 }
 
-function ArrowShape({ arrow, index, rows, cols }) {
-  const color = COLORS[index % COLORS.length]
+function ArrowShape({ arrow }) {
+  const color = ARROW_COLOR
   const points = arrow.path
     .map(([row, col]) => `${col + 0.5},${row + 0.5}`)
     .join(' ')
@@ -33,7 +29,7 @@ function ArrowShape({ arrow, index, rows, cols }) {
   const [headRow, headCol] = arrow.path[headIndex]
   const direction = arrow.direction || 'right'
   const angle = DIR_ANGLE[direction] ?? 0
-  const size = 0.36
+  const size = 0.30
 
   return (
     <g className="arrow-shape">
@@ -41,7 +37,7 @@ function ArrowShape({ arrow, index, rows, cols }) {
         points={points}
         fill="none"
         stroke="white"
-        strokeWidth="0.78"
+        strokeWidth="0.50"
         strokeLinecap="round"
         strokeLinejoin="round"
         opacity="0.9"
@@ -50,7 +46,7 @@ function ArrowShape({ arrow, index, rows, cols }) {
         points={points}
         fill="none"
         stroke={color}
-        strokeWidth="0.58"
+        strokeWidth="0.34"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -58,10 +54,10 @@ function ArrowShape({ arrow, index, rows, cols }) {
       <circle
         cx={headCol + 0.5}
         cy={headRow + 0.5}
-        r="0.29"
+        r="0.22"
         fill={color}
         stroke="white"
-        strokeWidth="0.09"
+        strokeWidth="0.05"
       />
 
       <polygon
@@ -102,9 +98,6 @@ function ArrowMazeBoard({ level }) {
           <ArrowShape
             key={arrow.id ?? index}
             arrow={arrow}
-            index={index}
-            rows={rows}
-            cols={cols}
           />
         ))}
       </svg>
