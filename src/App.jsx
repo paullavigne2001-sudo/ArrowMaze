@@ -98,3 +98,6 @@ function ArrowMazeBoard({ level }) {
         ))}
       </svg>
     </div>
+}
+
+export default App
