@@ -1,4 +1,4 @@
-{
+export default {
   "id": 1,
   "version": "1.0",
   "grid": {
