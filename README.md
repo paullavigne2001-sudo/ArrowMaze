@@ -1,4 +1,8 @@
-# React + Vite
+# ArrowMaze
+
+## Générateur V8.1
+
+`public/ArrowMaze_V8.1.html` est le générateur autonome V8.1. Il construit 60 flèches sur une grille 40×40, calcule toutes les dépendances présentes sur chaque rayon de sortie, rejette les cycles et optimise la difficulté à partir de la profondeur logique, des choix disponibles et des dépendances. Le nombre de virages sert uniquement de contrôle géométrique.
 
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
