@@ -69,14 +69,6 @@ pre { white-space:pre-wrap; overflow:auto; max-height:320px; background:#0c151b;
     <label>Nombre de flèches (V8.1 : 60)</label>
     <input id="arrows" type="number" min="60" max="60" value="60" readonly>
 
-    <div class="grid2">
-      <div><label>Longueur min.</label><input id="minLen" type="number" min="2" placeholder="auto"></div>
-      <div><label>Longueur max.</label><input id="maxLen" type="number" min="2" placeholder="auto"></div>
-    </div>
-
-    <label>Virages min. par flèche (vide = selon difficulté)</label>
-    <input id="minTurns" type="number" min="0" placeholder="Auto">
-
     <label>Numéro du niveau</label>
     <input id="levelNumber" type="number" min="1" step="1" value="1">
     <div class="small">Le numéro du niveau sert automatiquement de seed. Un même numéro donne toujours le même niveau.</div>
@@ -132,6 +124,7 @@ pre { white-space:pre-wrap; overflow:auto; max-height:320px; background:#0c151b;
 
   <details>
     <summary>Voir le JSON du niveau</summary>
+    <button id="copyJson" class="secondary">📋 Copier le JSON</button>
     <pre id="json"></pre>
   </details>
 </div>
@@ -139,7 +132,7 @@ pre { white-space:pre-wrap; overflow:auto; max-height:320px; background:#0c151b;
 
 <script>
 /**
- * level-generator.js — V6.4
+ * ArrowMaze V8.1 — générateur logique
  * ------------------------
  * Générateur procédural de niveaux pour un jeu de "flèches à faire sortir".
  *
