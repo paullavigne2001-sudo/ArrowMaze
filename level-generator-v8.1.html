@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ArrowMaze — Générateur V8.1</title>
+<style>
+:root{--bg:#101820;--panel:#182630;--panel2:#20333f;--text:#eef4f7;--muted:#9eb0ba;--accent:#8b5cf6;--ok:#34d399;--bad:#fb7185;--border:#304652}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+header{padding:18px 20px;border-bottom:1px solid var(--border);background:#121f27}h1{margin:0 0 5px;font-size:22px}header p{margin:0;color:var(--muted);font-size:13px}
+main{display:grid;grid-template-columns:350px minmax(0,1fr);min-height:calc(100vh - 78px)}
+aside{padding:16px;border-right:1px solid var(--border);background:#14232c;overflow:auto}
+label{display:block;margin:10px 0 5px;color:var(--muted);font-size:12px}
+input,button{width:100%;border:1px solid var(--border);border-radius:9px;padding:10px 11px;background:var(--panel);color:var(--text);font:inherit}
+button{cursor:pointer;font-weight:700}button.primary{background:var(--accent);border-color:var(--accent)}button.secondary{background:var(--panel2)}button.copy{background:#8b5cf6;border-color:#a78bfa;font-size:17px}
+button+button{margin-top:8px}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.small{color:var(--muted);font-size:11px;line-height:1.45}.status{padding:10px;border-radius:9px;background:var(--panel);border:1px solid var(--border);font-size:12px;line-height:1.5}.status.ok{border-color:#34d39966}.status.bad{border-color:#fb718566}
+#stage{padding:18px;display:flex;flex-direction:column;align-items:center;min-width:0}.toolbar{width:min(100%,900px);display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.toolbar button{width:auto;padding:8px 12px}
+#canvasWrap{width:min(100%,900px);aspect-ratio:1;background:#101f27;border:1px solid var(--border);border-radius:14px;padding:8px;box-shadow:0 10px 30px #0005}
+canvas{width:100%;height:100%;display:block;border-radius:9px}.stats{width:min(100%,900px);display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}.stat{background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:9px}.stat b{display:block;font-size:18px}.stat span{color:var(--muted);font-size:11px}
+details{margin-top:12px;width:min(100%,900px)}pre{white-space:pre-wrap;overflow:auto;max-height:330px;background:#0c151b;border:1px solid var(--border);padding:12px;border-radius:9px;font-size:11px}
+@media(max-width:850px){main{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid var(--border)}.stats{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<header>
+<h1>🧩 ArrowMaze — Générateur V8.1</h1>
+<p>Génération par solution logique → géométrie → dépendances réelles → validation croisée.</p>
+</header>
+<main>
+<aside>
+<label>Difficulté logique</label><input id="difficulty" type="range" min="1" max="10" value="5"><div id="difficultyValue" class="small">5 / 10</div>
+<div class="grid2"><div><label>Lignes</label><input id="rows" type="number" min="4" max="40" value="40"></div><div><label>Colonnes</label><input id="cols" type="number" min="4" max="40" value="40"></div></div>
+<label>Nombre de flèches</label><input id="arrows" type="number" min="2" value="60">
+<label>Numéro du niveau / seed</label><input id="seed" type="number" min="1" value="1">
+<label>Cible de virages géométriques</label><input id="turnTarget" type="number" min="0" value="1067">
+<div class="small">Les virages ne déterminent plus la difficulté. Ils servent uniquement à contrôler la forme de la grille. Pour 40×40, 2/3 des 1600 points ≈ 1067.</div>
+<br>
+<button class="primary" id="generate">Générer le niveau V8.1</button>
+<button class="copy" id="copyJson">📋 Copier le JSON</button>
+<button class="secondary" id="download">Télécharger le JSON</button>
+<div id="status" class="status">Prêt.</div>
+<hr style="border:0;border-top:1px solid var(--border);margin:18px 0">
+<div class="small">
+<b>V8.1 — architecture</b><br><br>
+1. Génère plusieurs chemins hamiltoniens et sélectionne une géométrie proche de la cible de virages.<br>
+2. Découpe le chemin en flèches.<br>
+3. Construit une solution cible sans cycle.<br>
+4. Oriente les flèches et calcule les dépendances sur <b>tout le rayon</b>, pas seulement le premier obstacle.<br>
+5. Rejette tout candidat dont le graphe réel diffère de la structure attendue, contient un cycle ou est insoluble.<br>
+6. La difficulté est calculée sur la structure logique : profondeur, dépendances, étapes forcées et embranchements.<br><br>
+<b>Important :</b> le nombre de virages est un contrôle de qualité de la grille, pas un multiplicateur artificiel de difficulté.
+</div>
+</aside>
+<div id="stage">
+<div class="toolbar"><button id="toggleGrid">Grille</button><button id="toggleIds">IDs</button><button id="toggleSolution">Solution</button></div>
+<div id="canvasWrap"><canvas id="canvas"></canvas></div>
+<div class="stats">
+<div class="stat"><b id="sArrows">—</b><span>flèches</span></div>
+<div class="stat"><b id="sScore">—</b><span>difficulté logique</span></div>
+<div class="stat"><b id="sDepth">—</b><span>profondeur</span></div>
+<div class="stat"><b id="sTurns">—</b><span>virages</span></div>
+</div>
+<details open><summary>Voir le JSON du niveau</summary><pre id="json"></pre></details>
+</div>
+</main>
+<script>
+const DIRS={up:[-1,0],right:[0,1],down:[1,0],left:[0,-1]};
+const NAMES=["up","right","down","left"];
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const key=(r,c)=>r+","+c;
+function rng(seed){let s=(Number(seed)>>>0)||1;return{next(){s=(s+0x6D2B79F5)|0;let t=Math.imul(s^(s>>>15),1|s);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296},int(a,b){return Math.floor(this.next()*(b-a+1))+a},pick(a){return a[this.int(0,a.length-1)]},shuffle(a){a=[...a];for(let i=a.length-1;i>0;i--){let j=this.int(0,i);[a[i],a[j]]=[a[j],a[i]]}return a}}}
+function inside(r,c,R,C){return r>=0&&r<R&&c>=0&&c<C}
+function dir(a,b){let dr=b[0]-a[0],dc=b[1]-a[1];if(dr===-1&&dc===0)return"up";if(dr===0&&dc===1)return"right";if(dr===1&&dc===0)return"down";if(dr===0&&dc===-1)return"left";throw Error("Chemin non adjacent")}
+function turnCount(path){let n=0;for(let i=1;i<path.length-1;i++)if(dir(path[i-1],path[i])!==dir(path[i],path[i+1]))n++;return n}
+function maxRun(path){let m=1,r=1,p=null;for(let i=1;i<path.length;i++){let d=dir(path[i-1],path[i]);if(d===p)r++;else r=1;m=Math.max(m,r);p=d}return m}
+function neighbours(p,R,C){let[r,c]=p,o=[];if(r)o.push([r-1,c]);if(r+1<R)o.push([r+1,c]);if(c)o.push([r,c-1]);if(c+1<C)o.push([r,c+1]);return o}
+function backbite(path,R,C,random,pos){
+ const start=random.next()<.5,n=path.length,end=start?path[0]:path[n-1],ei=start?0:n-1;
+ const cand=neighbours(end,R,C).filter(p=>{let k=pos[p[0]*C+p[1]];return k>=0&&k!==ei&&k!==(start?1:n-2)});
+ if(!cand.length)return;
+ const k=pos[random.pick(cand)[0]*C+random.pick(cand)[1]]; // replaced below
+ const q=random.pick(cand), kk=pos[q[0]*C+q[1]];
+ let lo=start?0:kk+1,hi=start?kk-1:n-1;
+ while(lo<hi){[path[lo],path[hi]]=[path[hi],path[lo]];lo++;hi--}
+ for(let i=start?0:kk+1;i<=(start?kk-1:n-1);i++){let p=path[i];pos[p[0]*C+p[1]]=i}
+}
+function makeSnake(R,C,vertical=false){
+ let p=[];if(!vertical){for(let r=0;r<R;r++){if(!(r&1))for(let c=0;c<C;c++)p.push([r,c]);else for(let c=C-1;c>=0;c--)p.push([r,c])}}
+ else{for(let c=0;c<C;c++){if(!(c&1))for(let r=0;r<R;r++)p.push([r,c]);else for(let r=R-1;r>=0;r--)p.push([r,c])}}
+ return p;
+}
+function buildPath(R,C,random,target){
+ let best=null,bd=1e99,candidates=Math.min(6,Math.max(3,Math.ceil(R*C/500)));
+ for(let z=0;z<candidates;z++){
+  let p=makeSnake(R,C,z===1||random.next()<.5);if(random.next()<.5)p.reverse();
+  if(random.next()<.5)for(const x of p)x[1]=C-1-x[1];
+  if(random.next()<.5)for(const x of p)x[0]=R-1-x[0];
+  const pos=new Int32Array(R*C);pos.fill(-1);p.forEach((x,i)=>pos[x[0]*C+x[1]]=i);
+  const it=Math.max(1200,Math.floor(R*C*(2.2+random.next()*1.8)));
+  for(let i=0;i<it;i++)backbite(p,R,C,random,pos);
+  const t=turnCount(p),mr=maxRun(p),score=Math.abs(t-target)+Math.max(0,mr-5)*80;
+  if(score<bd){bd=score;best=p.map(x=>[...x])}
+ }
+ return best;
+}
+function splitPath(path,count,random){
+ const n=path.length,count=clamp(Math.floor(count),2,n);
+ const min=Math.max(2,Math.floor(n/count*.35)),max=Math.max(min,Math.ceil(n/count*2.1));
+ let cuts=[],last=0;
+ for(let i=0;i<count-1;i++){
+  const left=count-i-1,lo=last+min,hi=Math.min(n-left*min,last+max);
+  const cut=lo<=hi?random.int(lo,hi):lo;cuts.push(cut);last=cut
+ }
+ cuts.push(n);let out=[],s=0;for(let i=0;i<cuts.length;i++){let e=cuts[i];out.push({id:i,path:path.slice(s,e),headIndex:null,direction:null});s=e}return out;
+}
+function endpointCandidates(a,R,C){
+ const out=[],ends=[[0,1],[a.path.length-1,a.path.length-2]];
+ for(const [hi,bi] of ends){
+  const h=a.path[hi],b=a.path[bi],dr=h[0]-b[0],dc=h[1]-b[1];
+  let d=dr===-1?"up":dr===1?"down":dc===-1?"left":dc===1?"right":null;if(!d)continue;
+  const own=new Set(a.path.map(p=>key(...p)));let[r,c]=[h[0]+DIRS[d][0],h[1]+DIRS[d][1]],self=false;
+  while(inside(r,c,R,C)){if(own.has(key(r,c))){self=true;break}r+=DIRS[d][0];c+=DIRS[d][1]}
+  if(!self)out.push({headIndex:hi,direction:d});
+ }
+ return out;
+}
+function cellMap(arrows){let m=new Map;for(const a of arrows)for(const p of a.path)m.set(key(...p),a.id);return m}
+function calculateDependencies(arrows,R,C){
+ const map=cellMap(arrows),deps=Array.from({length:arrows.length},()=>new Set());
+ for(const a of arrows){
+  if(a.headIndex==null)continue;const h=a.path[a.headIndex],[dr,dc]=DIRS[a.direction];let r=h[0]+dr,c=h[1]+dc;
+  while(inside(r,c,R,C)){const other=map.get(key(r,c));if(other!=null&&other!==a.id)deps[a.id].add(other);r+=dr;c+=dc}
+ }
+ return deps;
+}
+function cycle(deps){
+ const s=Array(deps.length).fill(0);function dfs(v){if(s[v]===1)return true;if(s[v]===2)return false;s[v]=1;for(const w of deps[v])if(dfs(w))return true;s[v]=2;return false}
+ return deps.some((_,i)=>dfs(i));
+}
+function solve(deps){
+ const rem=new Set(deps.map((_,i)=>i)),sol=[];
+ while(rem.size){let av=[];for(const i of rem){let b=false;for(const d of deps[i])if(rem.has(d)){b=true;break}if(!b)av.push(i)}if(!av.length)return null;av.sort((a,b)=>a-b);sol.push(av[0]);rem.delete(av[0])}return sol;
+}
+function profile(deps,sol){
+ const rem=new Set(deps.map((_,i)=>i)),choices=[];while(rem.size){let n=0;for(const i of rem){let b=false;for(const d of deps[i])if(rem.has(d)){b=true;break}if(!b)n++}choices.push(n);rem.delete(sol[sol.length-rem.size])}return choices;
+}
+function stats(deps){
+ let edges=0,memo=Array(deps.length).fill(-1);
+ for(const d of deps)edges+=d.size;
+ function depth(i){if(memo[i]>=0)return memo[i];let x=0;for(const d of deps[i])x=Math.max(x,depth(d)+1);return memo[i]=x}
+ let depthMax=0;for(let i=0;i<deps.length;i++)depthMax=Math.max(depthMax,depth(i));
+ return{edges,depth:depthMax};
+}
+function orientForDifficulty(arrows,R,C,random,difficulty){
+ let best=null,bestScore=-1e99;
+ const trials=difficulty<=3?100:difficulty<=6?180:260;
+ for(let tr=0;tr<trials;tr++){
+  const order=random.shuffle(arrows.map(a=>a.id)),rank=new Map(order.map((id,i)=>[id,i]));
+  const by=new Map(arrows.map(a=>[a.id,a]));
+  for(const a of arrows){const cs=endpointCandidates(a,R,C);if(!cs.length)continue;const scored=cs.map(c=>{a.headIndex=c.headIndex;a.direction=c.direction;const d=calculateDependencies(arrows,R,C)[a.id];let bad=0;for(const x of d)if(rank.get(x)>rank.get(a.id))bad++;return{c,d,bad}});scored.sort((x,y)=>x.bad-y.bad);const pick=scored.find(x=>x.bad===0)||scored[0];a.headIndex=pick.c.headIndex;a.direction=pick.c.direction}
+  const deps=calculateDependencies(arrows,R,C);if(cycle(deps))continue;const sol=solve(deps);if(!sol)continue;const st=stats(deps),ch=profile(deps,sol),forced=ch.filter(x=>x===1).length,avg=ch.reduce((a,b)=>a+b,0)/ch.length;
+  const desiredDepth=clamp(Math.round(5+difficulty*2.4),6,30),desiredEdges=clamp(Math.round(arrows.length*(.45+difficulty*.045)),25,arrows.length*3);
+  const score=st.depth*7+st.edges*1.7+forced*1.2+(1.8-avg)*12-Math.abs(st.depth-desiredDepth)*3-Math.abs(st.edges-desiredEdges)*.7;
+  if(score>bestScore){bestScore=score;best={arrows:arrows.map(a=>({...a,path:a.path.map(p=>[...p])})),deps,sol}}
+ }
+ return best;
+}
+function serialize(level){
+ return{id:level.id,version:"8.1",grid:{rows:level.rows,cols:level.cols,coverage:"100%"},arrows:level.arrows.map(a=>({id:a.id,path:a.path,headIndex:a.headIndex,direction:a.direction,head:a.path[a.headIndex]})),dependencies:level.deps.map((d,i)=>({arrow:i,blockedBy:[...d]})),solution:level.sol,difficulty:level.metrics,seed:level.seed};
+}
+function generate(opts){
+ const R=Number(opts.rows),C=Number(opts.cols),N=R*C,A=Math.min(Math.max(2,Number(opts.arrows)),Math.floor(N/2)),D=clamp(Number(opts.difficulty),1,10),random=rng(opts.seed),target=Number(opts.turnTarget)||Math.round(N*2/3);
+ let best=null,bestDist=1e99;
+ for(let attempt=0;attempt<10;attempt++){
+  const path=buildPath(R,C,random,target),turns=turnCount(path);
+  const arrows=splitPath(path,A,random),oriented=orientForDifficulty(arrows,R,C,random,D);
+  if(!oriented)continue;
+  const deps=oriented.deps,sol=oriented.sol,st=stats(deps),ch=profile(deps,sol);
+  const logical=clamp(1+st.depth*.28+st.edges/A*2.4+ch.filter(x=>x===1).length/A*2+(1-Math.min(1,(ch.reduce((a,b)=>a+b,0)/ch.length-1)/5))*2,1,10);
+  const metrics={score:Number(logical.toFixed(2)),level:D,requestedDifficulty:D,arrows:A,totalTurns:turns,turnRatio:Number((turns/Math.max(1,N-2)).toFixed(3)),dependencyEdges:st.edges,dependencyDepth:st.depth,averageChoices:Number((ch.reduce((a,b)=>a+b,0)/ch.length).toFixed(2)),minChoices:Math.min(...ch),maxChoices:Math.max(...ch),forcedSteps:ch.filter(x=>x===1).length,solutionCount:null};
+  const distance=Math.abs(logical-D)*4+Math.abs(turns-target)/Math.max(1,N)*.8;
+  if(distance<bestDist){bestDist=distance;best={id:opts.id,rows:R,cols:C,arrows:oriented.arrows,deps,sol,metrics,seed:opts.seed}}
+  if(Math.abs(logical-D)<.35&&Math.abs(turns-target)<N*.08)break;
+ }
+ if(!best)throw Error("Impossible de produire un niveau V8.1 solvable après 10 tentatives.");
+ return serialize(best);
+}
+let level=null,showGrid=true,showIds=false,showSol=false;
+function draw(){
+ if(!level)return;const cv=document.getElementById("canvas"),box=cv.getBoundingClientRect(),d=devicePixelRatio||1,sz=Math.min(box.width,box.height);cv.width=sz*d;cv.height=sz*d;const x=cv.getContext("2d");x.setTransform(d,0,0,d,0,0);x.fillStyle="#0b141a";x.fillRect(0,0,sz,sz);const cell=sz/level.grid.rows;
+ if(showGrid){x.strokeStyle="#243944";x.lineWidth=.5;for(let i=0;i<=level.grid.rows;i++){x.beginPath();x.moveTo(i*cell,0);x.lineTo(i*cell,sz);x.stroke();x.beginPath();x.moveTo(0,i*cell);x.lineTo(sz,i*cell);x.stroke()}}
+ const colors=["#a78bfa","#f472b6","#22d3ee","#34d399","#facc15","#60a5fa","#fb7185","#c084fc"];
+ for(const a of level.arrows){x.beginPath();a.path.forEach((p,i)=>{let X=(p[1]+.5)*cell,Y=(p[0]+.5)*cell;i?x.lineTo(X,Y):x.moveTo(X,Y)});x.strokeStyle=colors[a.id%colors.length];x.lineWidth=Math.max(1.5,cell*.14);x.lineJoin="round";x.lineCap="round";x.stroke();const[hR,hC]=a.head;x.fillStyle=x.strokeStyle;x.beginPath();x.arc((hC+.5)*cell,(hR+.5)*cell,cell*.16,0,Math.PI*2);x.fill();const [dr,dc]=DIRS[a.direction],hx=(hC+.5)*cell,hy=(hR+.5)*cell;x.beginPath();x.moveTo(hx+dc*cell*.42,hy+dr*cell*.42);x.lineTo(hx+(-dr-dc)*cell*.18,hy+(dr-dc)*cell*.18);x.lineTo(hx+(dr-dc)*cell*.18,hy+(-dr-dc)*cell*.18);x.closePath();x.fill();if(showIds){x.fillStyle="#fff";x.font=Math.max(7,cell*.28)+"px system-ui";x.fillText(a.id,hx+2,hy-2)}}
+ if(showSol){const pos=new Map(level.solution.map((id,i)=>[id,i]));x.fillStyle="#fff";x.font=Math.max(7,cell*.22)+"px system-ui";for(const a of level.arrows){const[hR,hC]=a.head;x.fillText(pos.get(a.id)+1,(hC+.15)*cell,(hR+.85)*cell)}}
+}
+function render(){if(!level)return;document.getElementById("sArrows").textContent=level.difficulty.arrows;document.getElementById("sScore").textContent=level.difficulty.score;document.getElementById("sDepth").textContent=level.difficulty.dependencyDepth;document.getElementById("sTurns").textContent=level.difficulty.totalTurns;document.getElementById("json").textContent=JSON.stringify(level,null,2);draw()}
+function generate(){
+ const D=+document.getElementById("difficulty").value;document.getElementById("status").textContent="Génération V8.1 en cours…";setTimeout(()=>{try{level=generate({id:+document.getElementById("seed").value,rows:+document.getElementById("rows").value,cols:+document.getElementById("cols").value,arrows:+document.getElementById("arrows").value,difficulty:D,turnTarget:+document.getElementById("turnTarget").value,seed:+document.getElementById("seed").value});const v=validate(level);document.getElementById("status").className="status "+(v.valid?"ok":"bad");document.getElementById("status").textContent=v.valid?"✓ Niveau V8.1 valide : solvable, sans cycle, dépendances complètes.":"✗ Validation : "+v.errors.join(" ");render()}catch(e){document.getElementById("status").className="status bad";document.getElementById("status").textContent="✗ "+e.message}},20)}
+function validate(l){
+ const errors=[],map=cellMap(l.arrows),N=l.grid.rows*l.grid.cols;let count=0;for(const a of l.arrows){for(const p of a.path){count++;if(!inside(p[0],p[1],l.grid.rows,l.grid.cols))errors.push("case hors grille");}}
+ if(count!==N)errors.push("couverture incomplète");const deps=calculateDependencies(l.arrows,l.grid.rows,l.grid.cols);if(cycle(deps))errors.push("cycle réel");const sol=solve(deps);if(!sol)errors.push("insoluble");for(let i=0;i<deps.length;i++){const a=[...deps[i]].sort((a,b)=>a-b).join(",");const b=[...(l.dependencies?.[i]?.blockedBy||[])].sort((a,b)=>a-b).join(",");if(a!==b)errors.push("dépendances JSON différentes du calcul réel");}return{valid:!errors.length,errors}}
+document.getElementById("difficulty").oninput=e=>document.getElementById("difficultyValue").textContent=e.target.value+" / 10";
+document.getElementById("generate").onclick=generate;
+document.getElementById("copyJson").onclick=async()=>{if(!level)return;try{await navigator.clipboard.writeText(JSON.stringify(level,null,2));document.getElementById("status").className="status ok";document.getElementById("status").textContent="✓ JSON copié dans le presse-papiers."}catch(e){document.getElementById("status").textContent="✗ Copie impossible dans ce navigateur."}};
+document.getElementById("download").onclick=()=>{if(!level)return;const blob=new Blob([JSON.stringify(level,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="arrowmaze-v8.1-level-"+level.id+".json";a.click();URL.revokeObjectURL(a.href)};
+document.getElementById("toggleGrid").onclick=()=>{showGrid=!showGrid;draw()};document.getElementById("toggleIds").onclick=()=>{showIds=!showIds;draw()};document.getElementById("toggleSolution").onclick=()=>{showSol=!showSol;draw()};addEventListener("resize",draw);generate();
+</script>
+</body>
+</html>
