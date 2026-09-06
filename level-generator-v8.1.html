@@ -43,12 +43,12 @@ details{margin-top:12px;width:min(100%,900px)}pre{white-space:pre-wrap;overflow:
 <hr style="border:0;border-top:1px solid var(--border);margin:18px 0">
 <div class="small">
 <b>V8.1 — architecture</b><br><br>
-1. Génère plusieurs chemins hamiltoniens et sélectionne une géométrie proche de la cible de virages.<br>
-2. Découpe le chemin en flèches.<br>
-3. Construit une solution cible sans cycle.<br>
-4. Oriente les flèches et calcule les dépendances sur <b>tout le rayon</b>, pas seulement le premier obstacle.<br>
-5. Rejette tout candidat dont le graphe réel diffère de la structure attendue, contient un cycle ou est insoluble.<br>
-6. La difficulté est calculée sur la structure logique : profondeur, dépendances, étapes forcées et embranchements.<br><br>
+1. Génère plusieurs chemins hamiltoniens et cherche une géométrie proche de la cible de virages.<br>
+2. Découpe le chemin en flèches puis cherche <b>la structure logique</b> avant d'accepter le niveau.<br>
+3. Explore les deux orientations possibles de chaque flèche et optimise le graphe réel pour la difficulté demandée.<br>
+4. Calcule les dépendances sur <b>tout le rayon</b> : toutes les flèches rencontrées sont conservées.<br>
+5. Rejette tout candidat cyclique ou insoluble et recalcule la solution sur les dépendances réelles.<br>
+6. La difficulté vient de la profondeur, des dépendances, des étapes forcées et du nombre de choix.<br><br>
 <b>Important :</b> le nombre de virages est un contrôle de qualité de la grille, pas un multiplicateur artificiel de difficulté.
 </div>
 </aside>
@@ -79,7 +79,6 @@ function backbite(path,R,C,random,pos){
  const start=random.next()<.5,n=path.length,end=start?path[0]:path[n-1],ei=start?0:n-1;
  const cand=neighbours(end,R,C).filter(p=>{let k=pos[p[0]*C+p[1]];return k>=0&&k!==ei&&k!==(start?1:n-2)});
  if(!cand.length)return;
- const k=pos[random.pick(cand)[0]*C+random.pick(cand)[1]]; // replaced below
  const q=random.pick(cand), kk=pos[q[0]*C+q[1]];
  let lo=start?0:kk+1,hi=start?kk-1:n-1;
  while(lo<hi){[path[lo],path[hi]]=[path[hi],path[lo]];lo++;hi--}
@@ -152,24 +151,82 @@ function stats(deps){
  let depthMax=0;for(let i=0;i<deps.length;i++)depthMax=Math.max(depthMax,depth(i));
  return{edges,depth:depthMax};
 }
+function orientationScore(deps,sol,difficulty,arrowCount){
+ if(!sol||cycle(deps))return null;
+ const st=stats(deps),ch=profile(deps,sol);
+ const edges=st.edges;
+ const forced=ch.filter(x=>x===1).length;
+ const avg=ch.reduce((a,b)=>a+b,0)/Math.max(1,ch.length);
+ const targetDepth=Math.round(3+difficulty*2.7);
+ const targetEdges=Math.round(8+difficulty*4.8);
+ const targetAvg=clamp(3.8-difficulty*.25,1.25,3.8);
+ const score=
+   10*st.depth+
+   2.2*edges+
+   1.4*forced-
+   7*Math.abs(st.depth-targetDepth)-
+   1.25*Math.abs(edges-targetEdges)-
+   5*Math.abs(avg-targetAvg);
+ return {score,depth:st.depth,edges,forced,avg};
+}
+
 function orientForDifficulty(arrows,R,C,random,difficulty){
- let best=null,bestScore=-1e99;
- const trials=difficulty<=3?100:difficulty<=6?180:260;
+ let best=null,bestScore=-Infinity;
+ const trials=difficulty<=3?80:difficulty<=6?140:220;
+ const ids=arrows.map(a=>a.id);
+
  for(let tr=0;tr<trials;tr++){
-  const order=random.shuffle(arrows.map(a=>a.id)),rank=new Map(order.map((id,i)=>[id,i]));
-  const by=new Map(arrows.map(a=>[a.id,a]));
-  for(const a of arrows){const cs=endpointCandidates(a,R,C);if(!cs.length)continue;const scored=cs.map(c=>{a.headIndex=c.headIndex;a.direction=c.direction;const d=calculateDependencies(arrows,R,C)[a.id];let bad=0;for(const x of d)if(rank.get(x)>rank.get(a.id))bad++;return{c,d,bad}});scored.sort((x,y)=>x.bad-y.bad);const pick=scored.find(x=>x.bad===0)||scored[0];a.headIndex=pick.c.headIndex;a.direction=pick.c.direction}
-  const deps=calculateDependencies(arrows,R,C);if(cycle(deps))continue;const sol=solve(deps);if(!sol)continue;const st=stats(deps),ch=profile(deps,sol),forced=ch.filter(x=>x===1).length,avg=ch.reduce((a,b)=>a+b,0)/ch.length;
-  const desiredDepth=clamp(Math.round(5+difficulty*2.4),6,30),desiredEdges=clamp(Math.round(arrows.length*(.45+difficulty*.045)),25,arrows.length*3);
-  const score=st.depth*7+st.edges*1.7+forced*1.2+(1.8-avg)*12-Math.abs(st.depth-desiredDepth)*3-Math.abs(st.edges-desiredEdges)*.7;
-  if(score>bestScore){bestScore=score;best={arrows:arrows.map(a=>({...a,path:a.path.map(p=>[...p])})),deps,sol}}
+  // Start with a complete logical orientation candidate.
+  for(const a of arrows){
+   const cs=endpointCandidates(a,R,C);
+   if(!cs.length){a.headIndex=null;a.direction=null;continue}
+   const pick=cs[random.int(0,cs.length-1)];
+   a.headIndex=pick.headIndex;
+   a.direction=pick.direction;
+  }
+
+  let deps=calculateDependencies(arrows,R,C);
+  let sol=solve(deps);
+  let cur=orientationScore(deps,sol,difficulty,arrows.length);
+  if(!cur)continue;
+
+  // Improve the logical structure by flipping arrow heads.  Geometry is
+  // accepted only after the resulting real dependency graph is acyclic.
+  for(let pass=0;pass<8;pass++){
+   let improved=false;
+   for(const id of random.shuffle(ids)){
+    const a=arrows[id];
+    const cs=endpointCandidates(a,R,C);
+    if(cs.length<2)continue;
+    const old={headIndex:a.headIndex,direction:a.direction};
+    const alt=cs.find(x=>x.headIndex!==old.headIndex)||cs[0];
+    a.headIndex=alt.headIndex;
+    a.direction=alt.direction;
+    const nd=calculateDependencies(arrows,R,C), ns=solve(nd), sc=orientationScore(nd,ns,difficulty,arrows.length);
+    if(sc&&sc.score>=cur.score){
+      deps=nd;sol=ns;cur=sc;improved=true;
+    }else{
+      a.headIndex=old.headIndex;a.direction=old.direction;
+    }
+   }
+   if(!improved)break;
+  }
+
+  if(cur.score>bestScore){
+   bestScore=cur.score;
+   best={
+    arrows:arrows.map(a=>({...a,path:a.path.map(p=>[...p])})),
+    deps,
+    sol
+   };
+  }
  }
  return best;
 }
 function serialize(level){
  return{id:level.id,version:"8.1",grid:{rows:level.rows,cols:level.cols,coverage:"100%"},arrows:level.arrows.map(a=>({id:a.id,path:a.path,headIndex:a.headIndex,direction:a.direction,head:a.path[a.headIndex]})),dependencies:level.deps.map((d,i)=>({arrow:i,blockedBy:[...d]})),solution:level.sol,difficulty:level.metrics,seed:level.seed};
 }
-function generate(opts){
+function generateLevel(opts){
  const R=Number(opts.rows),C=Number(opts.cols),N=R*C,A=Math.min(Math.max(2,Number(opts.arrows)),Math.floor(N/2)),D=clamp(Number(opts.difficulty),1,10),random=rng(opts.seed),target=Number(opts.turnTarget)||Math.round(N*2/3);
  let best=null,bestDist=1e99;
  for(let attempt=0;attempt<10;attempt++){
@@ -195,16 +252,16 @@ function draw(){
  if(showSol){const pos=new Map(level.solution.map((id,i)=>[id,i]));x.fillStyle="#fff";x.font=Math.max(7,cell*.22)+"px system-ui";for(const a of level.arrows){const[hR,hC]=a.head;x.fillText(pos.get(a.id)+1,(hC+.15)*cell,(hR+.85)*cell)}}
 }
 function render(){if(!level)return;document.getElementById("sArrows").textContent=level.difficulty.arrows;document.getElementById("sScore").textContent=level.difficulty.score;document.getElementById("sDepth").textContent=level.difficulty.dependencyDepth;document.getElementById("sTurns").textContent=level.difficulty.totalTurns;document.getElementById("json").textContent=JSON.stringify(level,null,2);draw()}
-function generate(){
- const D=+document.getElementById("difficulty").value;document.getElementById("status").textContent="Génération V8.1 en cours…";setTimeout(()=>{try{level=generate({id:+document.getElementById("seed").value,rows:+document.getElementById("rows").value,cols:+document.getElementById("cols").value,arrows:+document.getElementById("arrows").value,difficulty:D,turnTarget:+document.getElementById("turnTarget").value,seed:+document.getElementById("seed").value});const v=validate(level);document.getElementById("status").className="status "+(v.valid?"ok":"bad");document.getElementById("status").textContent=v.valid?"✓ Niveau V8.1 valide : solvable, sans cycle, dépendances complètes.":"✗ Validation : "+v.errors.join(" ");render()}catch(e){document.getElementById("status").className="status bad";document.getElementById("status").textContent="✗ "+e.message}},20)}
+function runGeneration(){
+ const D=+document.getElementById("difficulty").value;document.getElementById("status").textContent="Génération V8.1 en cours…";setTimeout(()=>{try{level=generateLevel({id:+document.getElementById("seed").value,rows:+document.getElementById("rows").value,cols:+document.getElementById("cols").value,arrows:+document.getElementById("arrows").value,difficulty:D,turnTarget:+document.getElementById("turnTarget").value,seed:+document.getElementById("seed").value});const v=validate(level);document.getElementById("status").className="status "+(v.valid?"ok":"bad");document.getElementById("status").textContent=v.valid?"✓ V8.1 valide : solution réelle, aucun cycle, dépendances complètes.":"✗ Validation : "+v.errors.join(" ");render()}catch(e){document.getElementById("status").className="status bad";document.getElementById("status").textContent="✗ "+e.message}},20)}
 function validate(l){
  const errors=[],map=cellMap(l.arrows),N=l.grid.rows*l.grid.cols;let count=0;for(const a of l.arrows){for(const p of a.path){count++;if(!inside(p[0],p[1],l.grid.rows,l.grid.cols))errors.push("case hors grille");}}
  if(count!==N)errors.push("couverture incomplète");const deps=calculateDependencies(l.arrows,l.grid.rows,l.grid.cols);if(cycle(deps))errors.push("cycle réel");const sol=solve(deps);if(!sol)errors.push("insoluble");for(let i=0;i<deps.length;i++){const a=[...deps[i]].sort((a,b)=>a-b).join(",");const b=[...(l.dependencies?.[i]?.blockedBy||[])].sort((a,b)=>a-b).join(",");if(a!==b)errors.push("dépendances JSON différentes du calcul réel");}return{valid:!errors.length,errors}}
 document.getElementById("difficulty").oninput=e=>document.getElementById("difficultyValue").textContent=e.target.value+" / 10";
-document.getElementById("generate").onclick=generate;
+document.getElementById("generate").onclick=runGeneration;
 document.getElementById("copyJson").onclick=async()=>{if(!level)return;try{await navigator.clipboard.writeText(JSON.stringify(level,null,2));document.getElementById("status").className="status ok";document.getElementById("status").textContent="✓ JSON copié dans le presse-papiers."}catch(e){document.getElementById("status").textContent="✗ Copie impossible dans ce navigateur."}};
 document.getElementById("download").onclick=()=>{if(!level)return;const blob=new Blob([JSON.stringify(level,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="arrowmaze-v8.1-level-"+level.id+".json";a.click();URL.revokeObjectURL(a.href)};
-document.getElementById("toggleGrid").onclick=()=>{showGrid=!showGrid;draw()};document.getElementById("toggleIds").onclick=()=>{showIds=!showIds;draw()};document.getElementById("toggleSolution").onclick=()=>{showSol=!showSol;draw()};addEventListener("resize",draw);generate();
+document.getElementById("toggleGrid").onclick=()=>{showGrid=!showGrid;draw()};document.getElementById("toggleIds").onclick=()=>{showIds=!showIds;draw()};document.getElementById("toggleSolution").onclick=()=>{showSol=!showSol;draw()};addEventListener("resize",draw);runGeneration();
 </script>
 </body>
 </html>
