@@ -1,13 +1,226 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>arrowmaze</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ArrowMaze</title>
+<style>
+  :root{
+    --bg:#0c1116; --panel:#141b22; --border:#26323c; --text:#eef4f7; --muted:#8fa2ad;
+    --accent:#8b5cf6; --ok:#34d399; --bad:#fb7185;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif;
+       min-height:100vh;display:flex;flex-direction:column;align-items:center}
+  header{width:100%;padding:14px 18px;border-bottom:1px solid var(--border);background:#0f161d;
+         display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  header h1{margin:0;font-size:19px}
+  header .sub{color:var(--muted);font-size:12px}
+  .hud{display:flex;gap:10px;align-items:center;font-size:13px}
+  .badge{background:var(--panel);border:1px solid var(--border);border-radius:999px;padding:6px 12px}
+  button{cursor:pointer;font:inherit;font-weight:700;border-radius:9px;border:1px solid var(--border);
+         background:var(--panel);color:var(--text);padding:9px 14px}
+  button.primary{background:var(--accent);border-color:var(--accent)}
+  button:disabled{opacity:.5;cursor:default}
+  main{width:min(96vw,640px);padding:16px;display:flex;flex-direction:column;align-items:center;gap:12px}
+  #boardWrap{width:100%;aspect-ratio:1;background:#0a1116;border:1px solid var(--border);
+             border-radius:14px;padding:6px;position:relative;box-shadow:0 10px 30px #0006}
+  svg{width:100%;height:100%;display:block;touch-action:manipulation}
+  .arrow{cursor:pointer}
+  .arrow polyline.core{stroke-linecap:round;stroke-linejoin:round;fill:none}
+  .arrow polyline.outline{stroke:#00000055;stroke-linecap:round;stroke-linejoin:round;fill:none}
+  .arrow.blocked{animation:shake .28s ease}
+  @keyframes shake{
+    0%,100%{transform:translate(0,0)}
+    25%{transform:translate(-1px,0)}
+    75%{transform:translate(1px,0)}
+  }
+  .arrow.leaving{transition:opacity .25s ease;opacity:0}
+  #status{min-height:18px;font-size:13px;color:var(--muted)}
+  #status.bad{color:var(--bad)}
+  #overlay{position:fixed;inset:0;background:#000c;display:none;align-items:center;justify-content:center;z-index:10}
+  #overlay.show{display:flex}
+  #overlay .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:26px 30px;
+                 text-align:center;max-width:320px}
+  #overlay h2{margin:0 0 8px}
+  #overlay p{color:var(--muted);margin:0 0 18px}
+  .links{color:var(--muted);font-size:12px}
+  .links a{color:inherit}
+  #loading{color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🧩 ArrowMaze</h1>
+    <div class="sub">Touche une flèche pour la faire sortir — son chemin de sortie doit être libre.</div>
+  </div>
+  <div class="hud">
+    <span class="badge" id="progress">— / —</span>
+    <span class="badge" id="movesBadge">0 coups</span>
+    <button id="undoBtn">Annuler</button>
+    <button id="newBtn">Nouveau niveau</button>
+  </div>
+</header>
+
+<main>
+  <div id="boardWrap">
+    <svg id="board" viewBox="0 0 40 40"></svg>
+  </div>
+  <div id="status">Génération du niveau…</div>
+  <div class="links">Envie de fabriquer tes propres niveaux ? <a href="editor.html">Ouvrir l'éditeur</a></div>
+</main>
+
+<div id="overlay">
+  <div class="card">
+    <h2>🎉 Niveau terminé !</h2>
+    <p id="overlayText"></p>
+    <button class="primary" id="nextBtn">Niveau suivant</button>
+  </div>
+</div>
+
+<script type="module">
+import { generateLevel, canExit } from './engine.js';
+
+const COLORS = ["#a78bfa","#f472b6","#22d3ee","#34d399","#facc15","#60a5fa","#fb7185","#c084fc"];
+
+const svg = document.getElementById('board');
+const statusEl = document.getElementById('status');
+const progressEl = document.getElementById('progress');
+const movesEl = document.getElementById('movesBadge');
+const undoBtn = document.getElementById('undoBtn');
+const newBtn = document.getElementById('newBtn');
+const overlay = document.getElementById('overlay');
+const overlayText = document.getElementById('overlayText');
+const nextBtn = document.getElementById('nextBtn');
+
+let level = null;
+let remaining = new Set();
+let history = []; // pile des flèches sorties, pour Annuler
+let moves = 0;
+
+function setStatus(msg, bad=false) {
+  statusEl.textContent = msg;
+  statusEl.classList.toggle('bad', bad);
+}
+
+async function newLevel() {
+  setStatus('Génération du niveau…');
+  overlay.classList.remove('show');
+  // laisse le message "génération…" s'afficher avant le calcul (bloquant mais bref)
+  await new Promise(r => setTimeout(r, 20));
+  const seed = Date.now() ^ Math.floor(Math.random() * 1e9);
+  level = generateLevel({ seed, arrows: 60, fast: true });
+  remaining = new Set(level.arrows.map(a => a.id));
+  history = [];
+  moves = 0;
+  render();
+  updateHud();
+  setStatus('Prêt.');
+}
+
+function pathToPoints(path) {
+  return path.map(([r, c]) => `${c + 0.5},${r + 0.5}`).join(' ');
+}
+
+function render() {
+  const { rows, cols } = level.grid;
+  svg.setAttribute('viewBox', `0 0 ${cols} ${rows}`);
+  svg.innerHTML = '';
+
+  // grille de fond légère
+  const bg = document.createElementNS(svg.namespaceURI, 'rect');
+  bg.setAttribute('x', 0); bg.setAttribute('y', 0);
+  bg.setAttribute('width', cols); bg.setAttribute('height', rows);
+  bg.setAttribute('fill', '#0a1116');
+  svg.appendChild(bg);
+
+  for (const a of level.arrows) {
+    if (!remaining.has(a.id)) continue;
+    const g = document.createElementNS(svg.namespaceURI, 'g');
+    g.classList.add('arrow');
+    g.dataset.id = a.id;
+
+    const color = COLORS[a.id % COLORS.length];
+    const pts = pathToPoints(a.path);
+
+    const outline = document.createElementNS(svg.namespaceURI, 'polyline');
+    outline.setAttribute('points', pts);
+    outline.setAttribute('class', 'outline');
+    outline.setAttribute('stroke-width', 0.30);
+    g.appendChild(outline);
+
+    const core = document.createElementNS(svg.namespaceURI, 'polyline');
+    core.setAttribute('points', pts);
+    core.setAttribute('class', 'core');
+    core.setAttribute('stroke', color);
+    core.setAttribute('stroke-width', 0.20);
+    g.appendChild(core);
+
+    const [hr, hc] = a.path[a.headIndex];
+    const angle = { up: 0, right: 90, down: 180, left: 270 }[a.direction];
+    const size = 0.30;
+    const head = document.createElementNS(svg.namespaceURI, 'polygon');
+    head.setAttribute('points', `0,-${size} ${size * 1.3},${size} 0,${size * 0.45} -${size * 1.3},${size}`);
+    head.setAttribute('fill', color);
+    head.setAttribute('stroke', '#fff');
+    head.setAttribute('stroke-width', 0.02);
+    head.setAttribute('transform', `translate(${hc + 0.5} ${hr + 0.5}) rotate(${angle})`);
+    g.appendChild(head);
+
+    g.addEventListener('click', () => attemptExit(a.id, g));
+    svg.appendChild(g);
+  }
+}
+
+function attemptExit(id, groupEl) {
+  if (!remaining.has(id)) return;
+  if (canExit(level, id, remaining)) {
+    remaining.delete(id);
+    history.push(id);
+    moves++;
+    groupEl.classList.add('leaving');
+    setTimeout(() => { if (remaining && !remaining.has(id)) render(); }, 220);
+    updateHud();
+    setStatus('Prêt.');
+    if (remaining.size === 0) {
+      setTimeout(() => {
+        overlayText.textContent = `Toutes les flèches sont sorties en ${moves} coups.`;
+        overlay.classList.add('show');
+      }, 260);
+    }
+  } else {
+    groupEl.classList.remove('blocked');
+    void groupEl.offsetWidth; // relance l'animation
+    groupEl.classList.add('blocked');
+    setStatus('Cette flèche est encore bloquée par une autre.', true);
+  }
+}
+
+function undo() {
+  if (!history.length) return;
+  const id = history.pop();
+  remaining.add(id);
+  moves = Math.max(0, moves - 1);
+  render();
+  updateHud();
+  setStatus('Coup annulé.');
+}
+
+function updateHud() {
+  const total = level.arrows.length;
+  const done = total - remaining.size;
+  progressEl.textContent = `${done} / ${total}`;
+  movesEl.textContent = `${moves} coup${moves > 1 ? 's' : ''}`;
+  undoBtn.disabled = history.length === 0;
+}
+
+newBtn.addEventListener('click', newLevel);
+nextBtn.addEventListener('click', newLevel);
+undoBtn.addEventListener('click', undo);
+
+newLevel();
+</script>
+</body>
 </html>

@@ -1,20 +1,40 @@
 # ArrowMaze
 
-## Générateur V8.1
+Un puzzle où chaque flèche doit sortir d'une grille 40×40 entièrement
+couverte de flèches enchevêtrées. Une flèche ne peut sortir que si tout son
+chemin de sortie, jusqu'au bord de la grille, est libre de toute autre
+flèche encore présente.
 
-`public/ArrowMaze_V8.1.html` est le générateur autonome V8.1. Il construit 60 flèches sur une grille 40×40, calcule toutes les dépendances présentes sur chaque rayon de sortie, rejette les cycles et optimise la difficulté à partir de la profondeur logique, des choix disponibles et des dépendances. Le nombre de virages sert uniquement de contrôle géométrique.
+Site pur HTML/JS, sans framework ni étape de build : ouvrir `index.html`
+suffit (ou servir le dossier avec n'importe quel serveur statique).
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+## Fichiers
 
-Currently, two official plugins are available:
+- **`index.html`** — le jeu. Touche une flèche pour tenter de la faire
+  sortir ; "Nouveau niveau" en génère un autre à la volée.
+- **`editor.html`** — l'éditeur/générateur : réglages (nombre de flèches,
+  seed, longueurs), aperçu, export JSON.
+- **`engine.js`** — le moteur partagé par les deux (module ES) : génération
+  de niveaux et logique de sortie des flèches.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Comment la solvabilité est garantie
 
-## React Compiler
+Les versions précédentes du générateur construisaient un chemin
+Hamiltonien, le découpaient en flèches, puis essayaient après coup de
+choisir une direction de sortie pour chacune en espérant obtenir un graphe
+de dépendances sans cycle. Sur une grille 40×40 couverte à 100 %, c'est
+statistiquement presque impossible : quasiment toutes les configurations
+générées ainsi contiennent un blocage circulaire caché.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Le moteur actuel construit les flèches **directement dans leur ordre de
+sortie** ("construction en oignon") : une case ne peut devenir tête d'une
+nouvelle flèche, dans une direction donnée, que si tout son rayon de sortie
+est déjà occupé par des flèches précédemment construites (ou sort
+immédiatement de la grille). Le premier pas du corps est en plus forcé dans
+la direction opposée à la sortie, pour que le dernier segment du tracé soit
+toujours aligné avec la pointe de la flèche.
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+Résultat : un niveau généré est solvable **par construction**, jamais
+vérifié après coup. Testé sur plusieurs centaines de générations et parties
+jouées avec des ordres de coups choisis librement (pas seulement la
+solution officielle).

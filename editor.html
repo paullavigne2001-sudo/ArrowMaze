@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ArrowMaze — Éditeur</title>
+<style>
+  :root{--bg:#0c1116;--panel:#141b22;--panel2:#1b242c;--border:#26323c;--text:#eef4f7;--muted:#8fa2ad;--accent:#8b5cf6;--ok:#34d399;--bad:#fb7185}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+  header{padding:16px 20px;border-bottom:1px solid var(--border);background:#0f161d}
+  header h1{margin:0 0 4px;font-size:20px}
+  header p{margin:0;color:var(--muted);font-size:13px}
+  header a{color:inherit}
+  main{display:grid;grid-template-columns:300px minmax(0,1fr);min-height:calc(100vh - 74px)}
+  aside{padding:16px;border-right:1px solid var(--border);background:#101820;overflow:auto}
+  label{display:block;margin:10px 0 5px;color:var(--muted);font-size:12px}
+  input,button{width:100%;border:1px solid var(--border);border-radius:9px;padding:9px 10px;background:var(--panel);color:var(--text);font:inherit}
+  button{cursor:pointer;font-weight:700}
+  button.primary{background:var(--accent);border-color:var(--accent)}
+  button.secondary{background:var(--panel2)}
+  button+button{margin-top:8px}
+  .row{display:flex;gap:8px}
+  .row > *{flex:1}
+  .status{margin-top:12px;padding:10px;border-radius:9px;background:var(--panel);border:1px solid var(--border);font-size:12px;line-height:1.5}
+  .status.ok{border-color:#34d39966}
+  .status.bad{border-color:#fb718566}
+  #stage{padding:16px;display:flex;flex-direction:column;align-items:center;min-width:0}
+  .toolbar{width:min(100%,760px);display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  .toolbar button{width:auto;padding:8px 12px}
+  #canvasWrap{width:min(100%,760px);aspect-ratio:1;background:#0a1116;border:1px solid var(--border);border-radius:14px;padding:6px}
+  canvas{width:100%;height:100%;display:block;border-radius:8px}
+  .stats{width:min(100%,760px);display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+  .stat{background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:9px;text-align:center}
+  .stat b{display:block;font-size:18px}
+  .stat span{color:var(--muted);font-size:11px}
+  details{margin-top:12px;width:min(100%,760px)}
+  pre{white-space:pre-wrap;overflow:auto;max-height:320px;background:#0c151b;border:1px solid var(--border);padding:12px;border-radius:9px;font-size:11px}
+  @media(max-width:820px){main{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid var(--border)}.stats{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🧩 ArrowMaze — Éditeur</h1>
+  <p>Construction "en oignon" : solvabilité garantie par construction. <a href="index.html">← Retour au jeu</a></p>
+</header>
+
+<main>
+  <aside>
+    <label>Nombre de flèches</label>
+    <input id="arrows" type="number" min="20" max="300" value="60">
+
+    <label>Numéro du niveau / seed</label>
+    <input id="seed" type="number" min="1" value="1">
+
+    <div class="row">
+      <div><label>Longueur min</label><input id="minLen" type="number" min="1" placeholder="auto"></div>
+      <div><label>Longueur max</label><input id="maxLen" type="number" min="1" placeholder="auto"></div>
+    </div>
+
+    <br>
+    <button class="primary" id="generate">Générer le niveau</button>
+    <button class="secondary" id="copyJson">📋 Copier le JSON</button>
+    <button class="secondary" id="download">Télécharger le JSON</button>
+
+    <div id="status" class="status">Prêt.</div>
+
+    <hr style="border:0;border-top:1px solid var(--border);margin:16px 0">
+    <div style="color:var(--muted);font-size:11px;line-height:1.5">
+      Les flèches sont construites directement dans leur ordre de sortie :
+      une tête n'est acceptée que si son rayon de sortie est déjà libre.
+      Aucune vérification a posteriori ne peut donc échouer — elle reste
+      effectuée ci-contre par sécurité (défense en profondeur).
+    </div>
+  </aside>
+
+  <div id="stage">
+    <div class="toolbar">
+      <button id="toggleGrid">Grille</button>
+      <button id="toggleIds">IDs</button>
+      <button id="toggleSolution">Ordre de sortie</button>
+    </div>
+    <div id="canvasWrap"><canvas id="canvas"></canvas></div>
+    <div class="stats">
+      <div class="stat"><b id="sArrows">—</b><span>flèches</span></div>
+      <div class="stat"><b id="sCoverage">—</b><span>couverture</span></div>
+      <div class="stat"><b id="sSingles">—</b><span>flèches à 1 case</span></div>
+    </div>
+    <details><summary>Voir le JSON du niveau</summary><pre id="json"></pre></details>
+  </div>
+</main>
+
+<script type="module">
+import { generateLevel, validateGeometry, calculateDependencies, hasCycle, solveDependencies, rayCells, DIRS } from './engine.js';
+
+const DIR_ANGLE = { up: 0, right: 90, down: 180, left: 270 };
+const COLORS = ["#a78bfa","#f472b6","#22d3ee","#34d399","#facc15","#60a5fa","#fb7185","#c084fc"];
+
+let level = null;
+let showGrid = true, showIds = false, showSolution = false;
+
+function setStatus(msg, kind) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status' + (kind ? ' ' + kind : '');
+}
+
+// Vérification stricte : simule le retrait dans l'ordre de la solution et
+// s'assure qu'à chaque étape, TOUT le rayon de sortie est réellement libre.
+function strictlySolvable(level) {
+  const { rows, cols } = level.grid;
+  const key = (r, c) => `${r},${c}`;
+  const arrowsById = new Map(level.arrows.map(a => [a.id, a]));
+  const remaining = new Set(level.solution);
+  for (const id of level.solution) {
+    remaining.delete(id);
+    const map = new Map();
+    for (const rid of remaining) for (const p of arrowsById.get(rid).path) map.set(key(...p), rid);
+    const a = arrowsById.get(id);
+    const head = a.path[a.headIndex];
+    for (const p of rayCells(head, a.direction, rows, cols)) {
+      if (map.has(key(...p))) return false;
+    }
+  }
+  return true;
+}
+
+function checkAlignment(level) {
+  let ok = true;
+  for (const a of level.arrows) {
+    if (a.path.length < 2) continue;
+    const head = a.path[a.headIndex];
+    const next = a.path[a.headIndex === 0 ? 1 : a.path.length - 2];
+    const [dr, dc] = DIRS[a.direction];
+    if (next[0] !== head[0] - dr || next[1] !== head[1] - dc) ok = false;
+  }
+  return ok;
+}
+
+function generate() {
+  const arrows = Number(document.getElementById('arrows').value);
+  const seed = Number(document.getElementById('seed').value);
+  const minLenRaw = document.getElementById('minLen').value;
+  const maxLenRaw = document.getElementById('maxLen').value;
+
+  setStatus('Génération…');
+  try {
+    level = generateLevel({
+      arrows, seed,
+      minLen: minLenRaw ? Number(minLenRaw) : undefined,
+      maxLen: maxLenRaw ? Number(maxLenRaw) : undefined,
+      attempts: 15
+    });
+
+    const geo = validateGeometry(level);
+    const strict = strictlySolvable(level);
+    const aligned = checkAlignment(level);
+    const valid = geo.valid && strict && aligned;
+
+    setStatus(
+      valid ? '✓ Niveau valide : solvable et aligné.' : '✗ Problème détecté (voir console).',
+      valid ? 'ok' : 'bad'
+    );
+    if (!valid) console.warn({ geo, strict, aligned });
+
+    render();
+  } catch (e) {
+    setStatus('✗ ' + e.message, 'bad');
+  }
+}
+
+function draw() {
+  const canvas = document.getElementById('canvas');
+  const box = canvas.getBoundingClientRect();
+  const d = devicePixelRatio || 1;
+  const sz = Math.min(box.width, box.height);
+  canvas.width = sz * d; canvas.height = sz * d;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.fillStyle = '#0a1116';
+  ctx.fillRect(0, 0, sz, sz);
+
+  const { rows, cols } = level.grid;
+  const cell = sz / rows;
+
+  if (showGrid) {
+    ctx.strokeStyle = '#1e2a33'; ctx.lineWidth = 0.5;
+    for (let i = 0; i <= rows; i++) {
+      ctx.beginPath(); ctx.moveTo(i * cell, 0); ctx.lineTo(i * cell, sz); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, i * cell); ctx.lineTo(sz, i * cell); ctx.stroke();
+    }
+  }
+
+  for (const a of level.arrows) {
+    ctx.beginPath();
+    a.path.forEach(([r, c], i) => {
+      const X = (c + 0.5) * cell, Y = (r + 0.5) * cell;
+      i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y);
+    });
+    ctx.strokeStyle = COLORS[a.id % COLORS.length];
+    ctx.lineWidth = Math.max(1.2, cell * 0.14);
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.stroke();
+
+    const [hr, hc] = a.path[a.headIndex];
+    const hx = (hc + 0.5) * cell, hy = (hr + 0.5) * cell;
+    const [dr, dc] = DIRS[a.direction];
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.beginPath();
+    ctx.moveTo(hx + dc * cell * 0.42, hy + dr * cell * 0.42);
+    ctx.lineTo(hx + (-dr - dc) * cell * 0.18, hy + (dr - dc) * cell * 0.18);
+    ctx.lineTo(hx + (dr - dc) * cell * 0.18, hy + (-dr - dc) * cell * 0.18);
+    ctx.closePath(); ctx.fill();
+
+    if (showIds) {
+      ctx.fillStyle = '#fff';
+      ctx.font = Math.max(7, cell * 0.28) + 'px system-ui';
+      ctx.fillText(a.id, hx + 2, hy - 2);
+    }
+  }
+
+  if (showSolution) {
+    const pos = new Map(level.solution.map((id, i) => [id, i]));
+    ctx.fillStyle = '#fff';
+    ctx.font = Math.max(7, cell * 0.22) + 'px system-ui';
+    for (const a of level.arrows) {
+      const [hr, hc] = a.path[a.headIndex];
+      ctx.fillText(pos.get(a.id) + 1, (hc + 0.15) * cell, (hr + 0.85) * cell);
+    }
+  }
+}
+
+function render() {
+  document.getElementById('sArrows').textContent = level.arrows.length;
+  const cells = level.arrows.reduce((s, a) => s + a.path.length, 0);
+  document.getElementById('sCoverage').textContent = Math.round(100 * cells / (level.grid.rows * level.grid.cols)) + '%';
+  document.getElementById('sSingles').textContent = level.arrows.filter(a => a.path.length === 1).length;
+  document.getElementById('json').textContent = JSON.stringify(level, null, 2);
+  draw();
+}
+
+document.getElementById('generate').addEventListener('click', generate);
+document.getElementById('copyJson').addEventListener('click', async () => {
+  if (!level) return;
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(level, null, 2));
+    setStatus('✓ JSON copié.', 'ok');
+  } catch {
+    setStatus('✗ Copie impossible dans ce navigateur.', 'bad');
+  }
+});
+document.getElementById('download').addEventListener('click', () => {
+  if (!level) return;
+  const blob = new Blob([JSON.stringify(level, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `arrowmaze-level-${level.id}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+document.getElementById('toggleGrid').addEventListener('click', () => { showGrid = !showGrid; draw(); });
+document.getElementById('toggleIds').addEventListener('click', () => { showIds = !showIds; draw(); });
+document.getElementById('toggleSolution').addEventListener('click', () => { showSolution = !showSolution; draw(); });
+addEventListener('resize', () => level && draw());
+
+generate();
+</script>
+</body>
+</html>
