@@ -250,7 +250,61 @@ export function buildLevelOnion(rows, cols, minLen, maxLen, rng) {
   const owner = new Int32Array(N).fill(-1);
   const idx = (r, c) => r * cols + c;
   const arrows = [];
+  const arrowsById = new Map();
   let nextId = 0, assignedCount = 0, guard = 0;
+
+  // Rattache une case orpheline (qui ne peut débuter aucun corps de flèche
+  // sans casser l'alignement tête/dernier-segment) à la QUEUE d'une flèche
+  // voisine déjà construite. C'est toujours sûr : seule la tête d'une
+  // flèche compte pour la règle de sortie, sa queue peut être prolongée
+  // librement sans rien changer à sa solvabilité.
+  function attachToNeighborTail(r, c) {
+    const neighbors = rng.shuffle(DIR_NAMES);
+    for (const d of neighbors) {
+      const [dr, dc] = DIRS[d];
+      const nr = r + dr, nc = c + dc;
+      if (!inBounds(nr, nc, rows, cols)) continue;
+      const ownerId = owner[idx(nr, nc)];
+      if (ownerId === -1) continue;
+      const arrow = arrowsById.get(ownerId);
+      const [tr, tc] = arrow.path[arrow.path.length - 1];
+      if (tr !== nr || tc !== nc) continue; // il faut prolonger depuis la queue exacte
+      arrow.path.push([r, c]);
+      owner[idx(r, c)] = ownerId;
+      return true;
+    }
+    return false;
+  }
+
+  // Répare une case orpheline (aucun voisin n'est exactement la queue
+  // d'une flèche) en raccourcissant PRÉCISÉMENT une flèche voisine jusqu'à
+  // son point de contact avec l'orpheline, puis en l'y attachant
+  // directement. Les cases ainsi libérées (l'ancienne fin de queue)
+  // redeviennent des cases libres normales, gérées aux passes suivantes.
+  function repairOrphan(r, c) {
+    const neighbors = rng.shuffle(DIR_NAMES);
+    for (const d of neighbors) {
+      const [dr, dc] = DIRS[d];
+      const nr = r + dr, nc = c + dc;
+      if (!inBounds(nr, nc, rows, cols)) continue;
+      const ownerId = owner[idx(nr, nc)];
+      if (ownerId === -1) continue;
+      const arrow = arrowsById.get(ownerId);
+      const i = arrow.path.findIndex(([pr, pc]) => pr === nr && pc === nc);
+      if (i < 1) continue; // case introuvable, ou c'est la tête (intouchable)
+      for (let k = arrow.path.length - 1; k > i; k--) {
+        const [fr, fc] = arrow.path[k];
+        owner[idx(fr, fc)] = -1;
+        arrow.path.pop();
+        assignedCount--;
+      }
+      arrow.path.push([r, c]);
+      owner[idx(r, c)] = ownerId;
+      assignedCount++;
+      return true;
+    }
+    return false;
+  }
 
   while (assignedCount < N) {
     guard++;
@@ -264,18 +318,49 @@ export function buildLevelOnion(rows, cols, minLen, maxLen, rng) {
       const nr = f.r + odr, nc = f.c + odc;
       return inBounds(nr, nc, rows, cols) && owner[idx(nr, nc)] === -1;
     });
-    const pool = extendable.length ? extendable : frontier;
-    const pick = pool[rng.int(0, pool.length - 1)];
-    const { r: hr, c: hc, dir } = pick;
 
-    const remainingCells = N - assignedCount;
-    const target = Math.min(remainingCells, rng.int(minLen, maxLen));
-    const path = growArrowBody(hr, hc, dir, target, owner, idx, rows, cols, rng);
+    if (extendable.length) {
+      const pick = extendable[rng.int(0, extendable.length - 1)];
+      const { r: hr, c: hc, dir } = pick;
+      const remainingCells = N - assignedCount;
+      const target = Math.max(2, Math.min(remainingCells, rng.int(minLen, maxLen)));
+      const path = growArrowBody(hr, hc, dir, target, owner, idx, rows, cols, rng);
 
-    for (const [r, c] of path) owner[idx(r, c)] = nextId;
-    arrows.push({ id: nextId, path, headIndex: 0, direction: dir });
-    assignedCount += path.length;
-    nextId++;
+      if (path.length < 2) return null; // ne devrait jamais arriver (garde-fou)
+
+      for (const [r, c] of path) owner[idx(r, c)] = nextId;
+      const arrow = { id: nextId, path, headIndex: 0, direction: dir };
+      arrows.push(arrow);
+      arrowsById.set(nextId, arrow);
+      assignedCount += path.length;
+      nextId++;
+    } else {
+      // Aucune case du front ne peut débuter un corps de 2+ cases : on
+      // balaie toutes les cases libres et on rattache celles qui touchent
+      // déjà exactement la queue d'une flèche, en boucle jusqu'à un point
+      // fixe. Puis, pour une orpheline restante, réparation ciblée.
+      let progress = true;
+      while (progress) {
+        progress = false;
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            if (owner[idx(r, c)] !== -1) continue;
+            if (attachToNeighborTail(r, c)) { assignedCount++; progress = true; }
+          }
+        }
+      }
+
+      if (assignedCount >= N) continue; // le balayage a tout résolu, rien à réparer
+
+      let repaired = false;
+      for (let r = 0; r < rows && !repaired; r++) {
+        for (let c = 0; c < cols && !repaired; c++) {
+          if (owner[idx(r, c)] !== -1) continue;
+          if (repairOrphan(r, c)) repaired = true;
+        }
+      }
+      if (!repaired) return null; // vraiment bloqué : nouvel essai (autre seed)
+    }
   }
   return arrows;
 }
