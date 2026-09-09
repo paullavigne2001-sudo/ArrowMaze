@@ -30,7 +30,7 @@
      désormais les limites du plateau. Le conteneur ne fait plus que réserver
      l'espace ; les flèches qui sortent peuvent le déborder pour rester
      visibles jusqu'au bord de l'écran (voir overflow:visible ci-dessous). */
-  #boardWrap{width:100%;aspect-ratio:1;background:transparent;position:relative;
+  #boardWrap{width:100%;flex:1;min-height:0;background:transparent;position:relative;
              overflow:hidden;touch-action:none}
   svg{width:100%;height:100%;display:block;touch-action:none;overflow:visible;
       transform-origin:center center}
@@ -447,7 +447,7 @@ function pathToPoints(path) {
 // bord de l'écran, au lieu de disparaître brutalement à la limite de la
 // grille (point 9 de la to-do list).
 function boardPadding(rows, cols) {
-  return Math.max(4, Math.round(Math.max(rows, cols) * 0.60));
+  return Math.max(2, Math.round(Math.max(rows, cols) * 0.10));
 }
 
 function render() {
