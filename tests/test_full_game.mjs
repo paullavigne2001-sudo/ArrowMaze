@@ -1,4 +1,4 @@
-import { generateLevel, canExit, validateGeometry } from './engine.js';
+import { generateLevel, canExit, validateGeometry } from '../engine.js';
 
 // Simule 10 parties complètes "à l'aveugle" : à chaque tour, on cherche
 // N'IMPORTE QUELLE flèche jouable (pas forcément celle de la solution

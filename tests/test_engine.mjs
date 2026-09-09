@@ -1,4 +1,4 @@
-import { generateLevel, validateGeometry, calculateDependencies, hasCycle, solveDependencies, rayCells, DIRS, canExit } from './engine.js';
+import { generateLevel, validateGeometry, calculateDependencies, hasCycle, solveDependencies, rayCells, DIRS, canExit } from '../engine.js';
 
 function strictlySolvable(level) {
   const { rows, cols } = level.grid;
