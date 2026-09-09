@@ -38,12 +38,15 @@
   .arrow.leaving{pointer-events:none}
   #status{min-height:18px;font-size:13px;color:var(--muted)}
   #status.bad{color:var(--bad)}
-  #overlay{position:fixed;inset:0;background:#000c;display:none;align-items:center;justify-content:center;z-index:10}
-  #overlay.show{display:flex}
-  #overlay .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:26px 30px;
+  .overlay{position:fixed;inset:0;background:#000c;display:none;align-items:center;justify-content:center;z-index:10}
+  .overlay.show{display:flex}
+  .overlay .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:26px 30px;
                  text-align:center;max-width:320px}
-  #overlay h2{margin:0 0 8px}
-  #overlay p{color:var(--muted);margin:0 0 18px}
+  .overlay h2{margin:0 0 8px}
+  .overlay p{color:var(--muted);margin:0 0 18px}
+  .overlay .card .stack{display:flex;flex-direction:column;gap:10px}
+  #livesBadge{letter-spacing:2px}
+  #livesBadge .lost{opacity:.28}
   .links{color:var(--muted);font-size:12px}
   .links a{color:inherit}
   #loading{color:var(--muted);font-size:13px}
@@ -58,6 +61,7 @@
   </div>
   <div class="hud">
     <span class="badge" id="progress">— / —</span>
+    <span class="badge" id="livesBadge">❤️❤️❤️</span>
     <span class="badge" id="movesBadge">0 coups</span>
     <button id="undoBtn">Annuler</button>
     <button id="newBtn">Nouveau niveau</button>
@@ -72,11 +76,22 @@
   <div class="links">Envie de fabriquer tes propres niveaux ? <a href="editor.html">Ouvrir l'éditeur</a></div>
 </main>
 
-<div id="overlay">
+<div id="overlay" class="overlay">
   <div class="card">
     <h2>🎉 Niveau terminé !</h2>
     <p id="overlayText"></p>
     <button class="primary" id="nextBtn">Niveau suivant</button>
+  </div>
+</div>
+
+<div id="gameOverOverlay" class="overlay">
+  <div class="card">
+    <h2>💔 Vies épuisées</h2>
+    <p>Tu as touché trop de flèches encore bloquées.</p>
+    <div class="stack">
+      <button class="primary" id="restartLevelBtn">Recommencer le niveau</button>
+      <button id="watchAdBtn">🎬 Regarder une pub (+3 vies)</button>
+    </div>
   </div>
 </div>
 
@@ -90,16 +105,23 @@ const svg = document.getElementById('board');
 const statusEl = document.getElementById('status');
 const progressEl = document.getElementById('progress');
 const movesEl = document.getElementById('movesBadge');
+const livesEl = document.getElementById('livesBadge');
 const undoBtn = document.getElementById('undoBtn');
 const newBtn = document.getElementById('newBtn');
 const overlay = document.getElementById('overlay');
 const overlayText = document.getElementById('overlayText');
 const nextBtn = document.getElementById('nextBtn');
+const gameOverOverlay = document.getElementById('gameOverOverlay');
+const restartLevelBtn = document.getElementById('restartLevelBtn');
+const watchAdBtn = document.getElementById('watchAdBtn');
+
+const MAX_LIVES = 3;
 
 let level = null;
 let remaining = new Set();
 let history = []; // pile des flèches sorties, pour Annuler
 let moves = 0;
+let lives = MAX_LIVES;
 
 function setStatus(msg, bad=false) {
   statusEl.textContent = msg;
@@ -109,6 +131,7 @@ function setStatus(msg, bad=false) {
 async function newLevel() {
   setStatus('Génération du niveau…');
   overlay.classList.remove('show');
+  gameOverOverlay.classList.remove('show');
   // laisse le message "génération…" s'afficher avant le calcul (bloquant mais bref)
   await new Promise(r => setTimeout(r, 20));
   const seed = Date.now() ^ Math.floor(Math.random() * 1e9);
@@ -116,9 +139,45 @@ async function newLevel() {
   remaining = new Set(level.arrows.map(a => a.id));
   history = [];
   moves = 0;
+  lives = MAX_LIVES;
   render();
   updateHud();
   setStatus('Prêt.');
+}
+
+// Relance LE MÊME niveau (même grille/flèches) depuis le début : utilisé
+// par l'écran "vies épuisées" → "Recommencer le niveau". Contrairement à
+// newLevel(), aucune nouvelle grille n'est générée.
+function restartLevel() {
+  gameOverOverlay.classList.remove('show');
+  remaining = new Set(level.arrows.map(a => a.id));
+  history = [];
+  moves = 0;
+  lives = MAX_LIVES;
+  render();
+  updateHud();
+  setStatus('Niveau recommencé.');
+}
+
+// Recharge les vies sans toucher à la progression en cours (flèches déjà
+// sorties, coups joués) : utilisé par l'écran "vies épuisées" →
+// "Regarder une pub".
+//
+// Point d'accroche pour un futur SDK publicitaire (ex: AdMob rewarded
+// video) : pour l'instant aucune pub n'est réellement diffusée, les vies
+// sont simplement recréditées. Quand le SDK sera branché, remplacer le
+// corps de watchAdForLives() par l'appel réel, et n'appeler grantLives()
+// que dans le callback de récompense.
+function watchAdForLives() {
+  // TODO(pub): showRewardedAd().then(grantLives).catch(() => {/* pub non vue */});
+  grantLives();
+}
+
+function grantLives() {
+  lives = MAX_LIVES;
+  gameOverOverlay.classList.remove('show');
+  updateHud();
+  setStatus('Vies rechargées — à toi de jouer.');
 }
 
 function pathToPoints(path) {
@@ -253,7 +312,14 @@ function attemptExit(id, groupEl) {
     groupEl.classList.remove('blocked');
     void groupEl.offsetWidth; // relance l'animation
     groupEl.classList.add('blocked');
-    setStatus('Cette flèche est encore bloquée par une autre.', true);
+    lives = Math.max(0, lives - 1);
+    updateHud();
+    if (lives <= 0) {
+      setStatus('Vies épuisées.', true);
+      gameOverOverlay.classList.add('show');
+    } else {
+      setStatus('Cette flèche est encore bloquée par une autre.', true);
+    }
   }
 }
 
@@ -273,11 +339,16 @@ function updateHud() {
   progressEl.textContent = `${done} / ${total}`;
   movesEl.textContent = `${moves} coup${moves > 1 ? 's' : ''}`;
   undoBtn.disabled = history.length === 0;
+  livesEl.innerHTML = Array.from({ length: MAX_LIVES }, (_, i) =>
+    i < lives ? '❤️' : '<span class="lost">🖤</span>'
+  ).join('');
 }
 
 newBtn.addEventListener('click', newLevel);
 nextBtn.addEventListener('click', newLevel);
 undoBtn.addEventListener('click', undo);
+restartLevelBtn.addEventListener('click', restartLevel);
+watchAdBtn.addEventListener('click', watchAdForLives);
 
 // Sélection "au plus proche" : on ne demande plus au joueur de viser
 // précisément le trait fin d'une flèche (quasi impossible sur une grille
@@ -309,7 +380,7 @@ function nearestArrowId(gx, gy) {
 }
 
 svg.addEventListener('click', (evt) => {
-  if (!level || !remaining.size) return;
+  if (!level || !remaining.size || lives <= 0) return;
   const p = pointToGrid(evt);
   if (!p) return;
   const id = nearestArrowId(p.x, p.y);
