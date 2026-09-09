@@ -27,15 +27,15 @@
              border-radius:14px;padding:6px;position:relative;box-shadow:0 10px 30px #0006}
   svg{width:100%;height:100%;display:block;touch-action:manipulation}
   .arrow{cursor:pointer}
-  .arrow polyline.core{stroke-linecap:round;stroke-linejoin:round;fill:none}
-  .arrow polyline.outline{stroke:#00000055;stroke-linecap:round;stroke-linejoin:round;fill:none}
+  .arrow polyline.core{stroke-linecap:round;stroke-linejoin:round;fill:none;pointer-events:none}
+  .arrow polyline.outline{stroke:#00000055;stroke-linecap:round;stroke-linejoin:round;fill:none;pointer-events:none}
   .arrow.blocked{animation:shake .28s ease}
   @keyframes shake{
     0%,100%{transform:translate(0,0)}
     25%{transform:translate(-1px,0)}
     75%{transform:translate(1px,0)}
   }
-  .arrow.leaving{transition:opacity .25s ease;opacity:0}
+  .arrow.leaving{pointer-events:none}
   #status{min-height:18px;font-size:13px;color:var(--muted)}
   #status.bad{color:var(--bad)}
   #overlay{position:fixed;inset:0;background:#000c;display:none;align-items:center;justify-content:center;z-index:10}
@@ -81,9 +81,10 @@
 </div>
 
 <script type="module">
-import { generateLevel, canExit } from './engine.js';
+import { generateLevel, canExit, DIRS } from './engine.js';
 
 const COLORS = ["#a78bfa","#f472b6","#22d3ee","#34d399","#facc15","#60a5fa","#fb7185","#c084fc"];
+const DIR_ANGLE = { up: 0, right: 90, down: 180, left: 270 };
 
 const svg = document.getElementById('board');
 const statusEl = document.getElementById('status');
@@ -138,58 +139,116 @@ function render() {
 
   for (const a of level.arrows) {
     if (!remaining.has(a.id)) continue;
-    const g = document.createElementNS(svg.namespaceURI, 'g');
-    g.classList.add('arrow');
-    g.dataset.id = a.id;
-
-    const color = COLORS[a.id % COLORS.length];
-    const pts = pathToPoints(a.path);
-
-    const outline = document.createElementNS(svg.namespaceURI, 'polyline');
-    outline.setAttribute('points', pts);
-    outline.setAttribute('class', 'outline');
-    outline.setAttribute('stroke-width', 0.30);
-    g.appendChild(outline);
-
-    const core = document.createElementNS(svg.namespaceURI, 'polyline');
-    core.setAttribute('points', pts);
-    core.setAttribute('class', 'core');
-    core.setAttribute('stroke', color);
-    core.setAttribute('stroke-width', 0.20);
-    g.appendChild(core);
-
-    const [hr, hc] = a.path[a.headIndex];
-    const angle = { up: 0, right: 90, down: 180, left: 270 }[a.direction];
-    const size = 0.30;
-    const head = document.createElementNS(svg.namespaceURI, 'polygon');
-    head.setAttribute('points', `0,-${size} ${size * 1.3},${size} 0,${size * 0.45} -${size * 1.3},${size}`);
-    head.setAttribute('fill', color);
-    head.setAttribute('stroke', '#fff');
-    head.setAttribute('stroke-width', 0.02);
-    head.setAttribute('transform', `translate(${hc + 0.5} ${hr + 0.5}) rotate(${angle})`);
-    g.appendChild(head);
-
-    g.addEventListener('click', () => attemptExit(a.id, g));
-    svg.appendChild(g);
+    svg.appendChild(buildArrowElement(a));
   }
+}
+
+// Construit le groupe SVG d'une flèche : zone de clic large (invisible),
+// contour, trait coloré, pointe. Renvoyé séparément de render() pour
+// pouvoir être réutilisé tel quel pendant l'animation de sortie.
+function buildArrowElement(a) {
+  const g = document.createElementNS(svg.namespaceURI, 'g');
+  g.classList.add('arrow');
+  g.dataset.id = a.id;
+
+  const color = COLORS[a.id % COLORS.length];
+  const pts = pathToPoints(a.path);
+
+  const outline = document.createElementNS(svg.namespaceURI, 'polyline');
+  outline.setAttribute('points', pts);
+  outline.setAttribute('class', 'outline');
+  outline.setAttribute('stroke-width', 0.30);
+  g.appendChild(outline);
+
+  const core = document.createElementNS(svg.namespaceURI, 'polyline');
+  core.setAttribute('points', pts);
+  core.setAttribute('class', 'core');
+  core.setAttribute('stroke', color);
+  core.setAttribute('stroke-width', 0.20);
+  g.appendChild(core);
+
+  const [hr, hc] = a.path[a.headIndex];
+  const angle = DIR_ANGLE[a.direction];
+  const size = 0.30;
+  const head = document.createElementNS(svg.namespaceURI, 'polygon');
+  head.setAttribute('class', 'head');
+  head.setAttribute('points', `0,-${size} ${size * 1.3},${size} 0,${size * 0.45} -${size * 1.3},${size}`);
+  head.setAttribute('fill', color);
+  head.setAttribute('stroke', '#fff');
+  head.setAttribute('stroke-width', 0.02);
+  head.setAttribute('transform', `translate(${hc + 0.5} ${hr + 0.5}) rotate(${angle})`);
+  g.appendChild(head);
+  return g;
+}
+
+// Anime la flèche qui sort de la grille EN SUIVANT SON PROPRE TRACÉ : le
+// corps glisse le long de ses propres virages, la tête continue tout droit
+// au-delà du bord dans sa direction de sortie, jusqu'à ce que toute la
+// flèche ait quitté la grille.
+function animateExit(a, groupEl, onDone) {
+  const { rows, cols } = level.grid;
+  const [dr, dc] = DIRS[a.direction];
+  const L = a.path.length;
+  const totalT = (L - 1) + Math.max(rows, cols);
+  const duration = Math.min(650, 260 + L * 6);
+  const start = performance.now();
+
+  const core = groupEl.querySelector('.core');
+  const outline = groupEl.querySelector('.outline');
+  const headEl = groupEl.querySelector('.head');
+  groupEl.classList.add('leaving');
+  groupEl.classList.remove('blocked');
+
+  function posAt(k) {
+    if (k >= 0) {
+      const k0 = Math.min(Math.floor(k), L - 1);
+      const k1 = Math.min(k0 + 1, L - 1);
+      const frac = k - k0;
+      const [r0, c0] = a.path[k0];
+      const [r1, c1] = a.path[k1];
+      return [r0 + (r1 - r0) * frac, c0 + (c1 - c0) * frac];
+    }
+    const steps = -k;
+    const [hr, hc] = a.path[0];
+    return [hr + dr * steps, hc + dc * steps];
+  }
+
+  function frame(now) {
+    const t = Math.min(1, (now - start) / duration) * totalT;
+    const pts = [];
+    for (let i = 0; i < L; i++) pts.push(posAt(i - t));
+    const ptsStr = pts.map(([r, c]) => `${c + 0.5},${r + 0.5}`).join(' ');
+    core.setAttribute('points', ptsStr);
+    outline.setAttribute('points', ptsStr);
+    const [hr, hc] = pts[0];
+    headEl.setAttribute('transform', `translate(${hc + 0.5} ${hr + 0.5}) rotate(${DIR_ANGLE[a.direction]})`);
+
+    if (t < totalT) {
+      requestAnimationFrame(frame);
+    } else {
+      groupEl.remove();
+      if (onDone) onDone();
+    }
+  }
+  requestAnimationFrame(frame);
 }
 
 function attemptExit(id, groupEl) {
   if (!remaining.has(id)) return;
   if (canExit(level, id, remaining)) {
+    const arrow = level.arrows.find(x => x.id === id);
     remaining.delete(id);
     history.push(id);
     moves++;
-    groupEl.classList.add('leaving');
-    setTimeout(() => { if (remaining && !remaining.has(id)) render(); }, 220);
-    updateHud();
-    setStatus('Prêt.');
-    if (remaining.size === 0) {
-      setTimeout(() => {
+    const justWon = remaining.size === 0;
+    animateExit(arrow, groupEl, () => {
+      if (justWon) {
         overlayText.textContent = `Toutes les flèches sont sorties en ${moves} coups.`;
         overlay.classList.add('show');
-      }, 260);
-    }
+      }
+    });
+    updateHud();
+    setStatus('Prêt.');
   } else {
     groupEl.classList.remove('blocked');
     void groupEl.offsetWidth; // relance l'animation
@@ -219,6 +278,45 @@ function updateHud() {
 newBtn.addEventListener('click', newLevel);
 nextBtn.addEventListener('click', newLevel);
 undoBtn.addEventListener('click', undo);
+
+// Sélection "au plus proche" : on ne demande plus au joueur de viser
+// précisément le trait fin d'une flèche (quasi impossible sur une grille
+// 40x40 sur un écran de téléphone, chaque case ne faisant que quelques
+// pixels). On convertit le point touché en coordonnées de grille, et on
+// sélectionne la flèche dont une case est la plus proche de ce point,
+// où que le doigt se pose sur le plateau.
+function pointToGrid(evt) {
+  const pt = svg.createSVGPoint();
+  pt.x = evt.clientX;
+  pt.y = evt.clientY;
+  const ctm = svg.getScreenCTM();
+  if (!ctm) return null;
+  const local = pt.matrixTransform(ctm.inverse());
+  return local; // {x, y} en unités de grille (colonne, ligne)
+}
+
+function nearestArrowId(gx, gy) {
+  let bestId = null, bestDist = Infinity;
+  for (const id of remaining) {
+    const a = level.arrows.find(x => x.id === id);
+    for (const [r, c] of a.path) {
+      const dx = (c + 0.5) - gx, dy = (r + 0.5) - gy;
+      const d = dx * dx + dy * dy;
+      if (d < bestDist) { bestDist = d; bestId = id; }
+    }
+  }
+  return bestId;
+}
+
+svg.addEventListener('click', (evt) => {
+  if (!level || !remaining.size) return;
+  const p = pointToGrid(evt);
+  if (!p) return;
+  const id = nearestArrowId(p.x, p.y);
+  if (id == null) return;
+  const groupEl = svg.querySelector(`.arrow[data-id="${id}"]`);
+  if (groupEl) attemptExit(id, groupEl);
+});
 
 newLevel();
 </script>
