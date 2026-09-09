@@ -22,10 +22,14 @@
          background:var(--panel);color:var(--text);padding:9px 14px}
   button.primary{background:var(--accent);border-color:var(--accent)}
   button:disabled{opacity:.5;cursor:default}
-  main{width:min(96vw,640px);padding:16px;display:flex;flex-direction:column;align-items:center;gap:12px}
-  #boardWrap{width:100%;aspect-ratio:1;background:#0a1116;border:1px solid var(--border);
-             border-radius:14px;padding:6px;position:relative;box-shadow:0 10px 30px #0006}
-  svg{width:100%;height:100%;display:block;touch-action:manipulation}
+  main{width:min(100vw,720px);padding:6px 4px;display:flex;flex-direction:column;align-items:center;gap:10px}
+  /* Point 9 : plus de cadre visible autour de la grille (ni fond, ni bordure,
+     ni coins arrondis) — seule la grille de points (voir render()) matérialise
+     désormais les limites du plateau. Le conteneur ne fait plus que réserver
+     l'espace ; les flèches qui sortent peuvent le déborder pour rester
+     visibles jusqu'au bord de l'écran (voir overflow:visible ci-dessous). */
+  #boardWrap{width:100%;aspect-ratio:1;background:transparent;position:relative}
+  svg{width:100%;height:100%;display:block;touch-action:manipulation;overflow:visible}
   .arrow{cursor:pointer}
   .arrow polyline.core{stroke-linecap:round;stroke-linejoin:round;fill:none;pointer-events:none}
   .arrow polyline.outline{stroke:#00000055;stroke-linecap:round;stroke-linejoin:round;fill:none;pointer-events:none}
@@ -423,16 +427,49 @@ function pathToPoints(path) {
   return path.map(([r, c]) => `${c + 0.5},${r + 0.5}`).join(' ');
 }
 
+// Marge (en unités de grille) ajoutée tout autour du plateau réel dans le
+// viewBox : elle donne aux flèches qui sortent la place de continuer leur
+// trajectoire au-delà du bord de la grille, visibles jusqu'à l'approche du
+// bord de l'écran, au lieu de disparaître brutalement à la limite de la
+// grille (point 9 de la to-do list).
+function boardPadding(rows, cols) {
+  return Math.max(2, Math.round(Math.max(rows, cols) * 0.10));
+}
+
 function render() {
   const { rows, cols } = level.grid;
-  svg.setAttribute('viewBox', `0 0 ${cols} ${rows}`);
+  const pad = boardPadding(rows, cols);
+  // Le viewBox dépasse la grille réelle de `pad` de chaque côté ; la grille
+  // elle-même reste positionnée en (0,0)-(cols,rows) à l'intérieur.
+  svg.setAttribute('viewBox', `${-pad} ${-pad} ${cols + pad * 2} ${rows + pad * 2}`);
   svg.innerHTML = '';
 
-  // grille de fond légère
+  // Plus de cadre / fond plein pour délimiter la grille : ses limites sont
+  // matérialisées par une grille de points, un point par case, aux mêmes
+  // coordonnées que celles sur lesquelles les flèches sont alignées
+  // (r+0.5, c+0.5). La zone de marge autour reste vide (fond de page).
+  let defs = svg.querySelector('defs');
+  if (!defs) {
+    defs = document.createElementNS(svg.namespaceURI, 'defs');
+    svg.appendChild(defs);
+  } else {
+    defs.innerHTML = '';
+  }
+  const pattern = document.createElementNS(svg.namespaceURI, 'pattern');
+  pattern.setAttribute('id', 'gridDots');
+  pattern.setAttribute('width', '1');
+  pattern.setAttribute('height', '1');
+  pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+  const dot = document.createElementNS(svg.namespaceURI, 'circle');
+  dot.setAttribute('cx', '0.5'); dot.setAttribute('cy', '0.5'); dot.setAttribute('r', '0.035');
+  dot.setAttribute('fill', 'var(--border)');
+  pattern.appendChild(dot);
+  defs.appendChild(pattern);
+
   const bg = document.createElementNS(svg.namespaceURI, 'rect');
   bg.setAttribute('x', 0); bg.setAttribute('y', 0);
   bg.setAttribute('width', cols); bg.setAttribute('height', rows);
-  bg.setAttribute('fill', '#0a1116');
+  bg.setAttribute('fill', 'url(#gridDots)');
   svg.appendChild(bg);
 
   for (const a of level.arrows) {
