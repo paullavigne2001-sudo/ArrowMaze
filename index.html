@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>ArrowMaze</title>
 <style>
   :root{
@@ -10,8 +10,9 @@
     --accent:#8b5cf6; --ok:#34d399; --bad:#fb7185;
   }
   *{box-sizing:border-box}
+  html,body{height:100%}
   body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif;
-       min-height:100vh;display:flex;flex-direction:column;align-items:center}
+       height:100vh;overflow:hidden;display:flex;flex-direction:column;align-items:center}
   header{width:100%;padding:14px 18px;border-bottom:1px solid var(--border);background:#0f161d;
          display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
   header h1{margin:0;font-size:19px}
@@ -22,14 +23,17 @@
          background:var(--panel);color:var(--text);padding:9px 14px}
   button.primary{background:var(--accent);border-color:var(--accent)}
   button:disabled{opacity:.5;cursor:default}
-  main{width:min(100vw,720px);padding:6px 4px;display:flex;flex-direction:column;align-items:center;gap:10px}
+  main{width:min(100vw,720px);flex:1;min-height:0;padding:6px 4px;display:flex;flex-direction:column;
+       align-items:center;justify-content:center;gap:10px}
   /* Point 9 : plus de cadre visible autour de la grille (ni fond, ni bordure,
      ni coins arrondis) — seule la grille de points (voir render()) matérialise
      désormais les limites du plateau. Le conteneur ne fait plus que réserver
      l'espace ; les flèches qui sortent peuvent le déborder pour rester
      visibles jusqu'au bord de l'écran (voir overflow:visible ci-dessous). */
-  #boardWrap{width:100%;aspect-ratio:1;background:transparent;position:relative}
-  svg{width:100%;height:100%;display:block;touch-action:manipulation;overflow:visible}
+  #boardWrap{width:100%;aspect-ratio:1;background:transparent;position:relative;
+             overflow:hidden;touch-action:none}
+  svg{width:100%;height:100%;display:block;touch-action:none;overflow:visible;
+      transform-origin:center center}
   .arrow{cursor:pointer}
   .arrow polyline.core{stroke-linecap:round;stroke-linejoin:round;fill:none;pointer-events:none}
   .arrow polyline.outline{stroke:#00000055;stroke-linecap:round;stroke-linejoin:round;fill:none;pointer-events:none}
@@ -76,7 +80,8 @@
   #movesBadge,
   #undoBtn,
   #newBtn,
-  #homeBtn{display:none}
+  #homeBtn,
+  #status{display:none}
   #gameMain .links{display:none}
 
   /* Écran d'accueil */
@@ -146,6 +151,13 @@
   <div class="hud">
     <span class="badge" id="progress">— / —</span>
     <span class="badge" id="livesBadge">❤️❤️❤️</span>
+    <button id="guidesBtn" class="iconBtn" type="button" title="Lignes de guidage" aria-pressed="false" aria-label="Afficher ou masquer les lignes de guidage">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="4" y1="7" x2="20" y2="7"/>
+        <line x1="4" y1="12" x2="15" y2="12"/>
+        <line x1="4" y1="17" x2="18" y2="17"/>
+      </svg>
+    </button>
     <span class="badge" id="movesBadge">0 coups</span>
     <button id="hintBtn" title="Indice (regarder une pub)" aria-label="Demander un indice en regardant une publicité">💡 Indice · AD</button>
     <button id="homeBtn" title="Retour à l'accueil" aria-label="Retour à l'accueil">🏠</button>
@@ -159,15 +171,6 @@
     <svg id="board" viewBox="0 0 40 40"></svg>
   </div>
   <div id="status">Génération du niveau…</div>
-  <div class="toolbar">
-    <button id="guidesBtn" class="iconBtn" type="button" title="Lignes de guidage" aria-pressed="false" aria-label="Afficher ou masquer les lignes de guidage">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-        <line x1="4" y1="7" x2="20" y2="7"/>
-        <line x1="4" y1="12" x2="15" y2="12"/>
-        <line x1="4" y1="17" x2="18" y2="17"/>
-      </svg>
-    </button>
-  </div>
   <div class="links">Envie de fabriquer tes propres niveaux ? <a href="editor.html">Ouvrir l'éditeur</a></div>
 </main>
 
@@ -197,6 +200,7 @@ const COLORS = ["#a78bfa","#f472b6","#22d3ee","#34d399","#facc15","#60a5fa","#fb
 const DIR_ANGLE = { up: 0, right: 90, down: 180, left: 270 };
 
 const svg = document.getElementById('board');
+const boardWrap = document.getElementById('boardWrap');
 const statusEl = document.getElementById('status');
 const progressEl = document.getElementById('progress');
 const movesEl = document.getElementById('movesBadge');
@@ -437,6 +441,7 @@ function boardPadding(rows, cols) {
 }
 
 function render() {
+  resetZoom();
   const { rows, cols } = level.grid;
   const pad = boardPadding(rows, cols);
   // Le viewBox dépasse la grille réelle de `pad` de chaque côté ; la grille
@@ -503,11 +508,15 @@ function renderGuides() {
 
 function buildGuideLine(a) {
   const { rows, cols } = level.grid;
+  const pad = boardPadding(rows, cols);
   const [hr, hc] = a.path[a.headIndex];
   const [dr, dc] = DIRS[a.direction];
   const x1 = hc + 0.5, y1 = hr + 0.5;
-  const x2 = dc !== 0 ? (dc > 0 ? cols : 0) : x1;
-  const y2 = dr !== 0 ? (dr > 0 ? rows : 0) : y1;
+  // La ligne se prolonge au-delà de la grille, jusqu'au bord de la zone
+  // visible (même marge `pad` que celle utilisée pour les flèches qui
+  // sortent), au lieu de s'arrêter net sur le bord de la grille.
+  const x2 = dc !== 0 ? (dc > 0 ? cols + pad : -pad) : x1;
+  const y2 = dr !== 0 ? (dr > 0 ? rows + pad : -pad) : y1;
 
   const color = COLORS[a.id % COLORS.length];
   const line = document.createElementNS(svg.namespaceURI, 'line');
@@ -728,6 +737,7 @@ function nearestArrowId(gx, gy) {
 }
 
 svg.addEventListener('click', (evt) => {
+  if (suppressNextClick) { suppressNextClick = false; return; }
   if (!level || !remaining.size || lives <= 0) return;
   const p = pointToGrid(evt);
   if (!p) return;
@@ -735,6 +745,92 @@ svg.addEventListener('click', (evt) => {
   if (id == null) return;
   const groupEl = svg.querySelector(`.arrow[data-id="${id}"]`);
   if (groupEl) attemptExit(id, groupEl);
+});
+
+// --- Zoom / pan tactile sur la grille (point 11) ---------------------------
+// Le pincement à deux doigts zoome uniquement la grille de jeu (le reste de
+// l'écran, header compris, ne bouge pas). Un doigt permet ensuite de
+// déplacer la vue (pan) tant qu'on est zoomé. Un double-tap réinitialise.
+// Le zoom/pan est appliqué en CSS (transform sur le <svg>) : la sélection
+// d'une flèche au clic (pointToGrid → getScreenCTM) reste correcte car le
+// navigateur inclut ce transform dans la matrice écran → coordonnées SVG.
+let zoomScale = 1, panX = 0, panY = 0;
+let suppressNextClick = false;
+let gesture = null;
+const MIN_ZOOM = 1, MAX_ZOOM = 4;
+
+function applyBoardTransform() {
+  svg.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomScale})`;
+}
+
+function resetZoom() {
+  zoomScale = 1; panX = 0; panY = 0;
+  gesture = null;
+  applyBoardTransform();
+}
+
+function clampPan() {
+  const rect = boardWrap.getBoundingClientRect();
+  const maxX = (rect.width * (zoomScale - 1)) / 2;
+  const maxY = (rect.height * (zoomScale - 1)) / 2;
+  panX = Math.max(-maxX, Math.min(maxX, panX));
+  panY = Math.max(-maxY, Math.min(maxY, panY));
+}
+
+function touchDist(t0, t1) {
+  return Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+}
+
+boardWrap.addEventListener('touchstart', (evt) => {
+  if (evt.touches.length === 2) {
+    evt.preventDefault();
+    gesture = {
+      type: 'pinch',
+      startDist: touchDist(evt.touches[0], evt.touches[1]),
+      startScale: zoomScale,
+      startPan: { x: panX, y: panY },
+    };
+  } else if (evt.touches.length === 1 && zoomScale > 1) {
+    gesture = {
+      type: 'pan',
+      startX: evt.touches[0].clientX,
+      startY: evt.touches[0].clientY,
+      startPan: { x: panX, y: panY },
+      moved: false,
+    };
+  }
+}, { passive: false });
+
+boardWrap.addEventListener('touchmove', (evt) => {
+  if (!gesture) return;
+  if (gesture.type === 'pinch' && evt.touches.length === 2) {
+    evt.preventDefault();
+    const d = touchDist(evt.touches[0], evt.touches[1]);
+    zoomScale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, gesture.startScale * (d / gesture.startDist)));
+    panX = gesture.startPan.x;
+    panY = gesture.startPan.y;
+    clampPan();
+    applyBoardTransform();
+  } else if (gesture.type === 'pan' && evt.touches.length === 1) {
+    evt.preventDefault();
+    const dx = evt.touches[0].clientX - gesture.startX;
+    const dy = evt.touches[0].clientY - gesture.startY;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) gesture.moved = true;
+    panX = gesture.startPan.x + dx;
+    panY = gesture.startPan.y + dy;
+    clampPan();
+    applyBoardTransform();
+  }
+}, { passive: false });
+
+let lastTap = 0;
+boardWrap.addEventListener('touchend', (evt) => {
+  if (gesture && gesture.type === 'pan' && gesture.moved) suppressNextClick = true;
+  if (evt.touches.length > 0) { gesture = null; return; }
+  const now = Date.now();
+  if (now - lastTap < 300) resetZoom(); // double-tap : réinitialise le zoom
+  lastTap = now;
+  gesture = null;
 });
 
 showHome();
