@@ -38,6 +38,12 @@
   .arrow.leaving{pointer-events:none}
   #status{min-height:18px;font-size:13px;color:var(--muted)}
   #status.bad{color:var(--bad)}
+  .toolbar{display:flex;justify-content:center;gap:10px;width:100%}
+  .iconBtn{display:flex;align-items:center;justify-content:center;width:44px;height:44px;
+           padding:0;border-radius:12px;background:var(--panel);border:1px solid var(--border);color:var(--muted)}
+  .iconBtn svg{width:22px;height:22px}
+  .iconBtn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  .guideLine{pointer-events:none;stroke-dasharray:0.16 0.18;stroke-linecap:round}
   .overlay{position:fixed;inset:0;background:#000c;display:none;align-items:center;justify-content:center;z-index:10}
   .overlay.show{display:flex}
   .overlay .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:26px 30px;
@@ -73,6 +79,15 @@
     <svg id="board" viewBox="0 0 40 40"></svg>
   </div>
   <div id="status">Génération du niveau…</div>
+  <div class="toolbar">
+    <button id="guidesBtn" class="iconBtn" type="button" title="Lignes de guidage" aria-pressed="false" aria-label="Afficher ou masquer les lignes de guidage">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="4" y1="7" x2="20" y2="7"/>
+        <line x1="4" y1="12" x2="15" y2="12"/>
+        <line x1="4" y1="17" x2="18" y2="17"/>
+      </svg>
+    </button>
+  </div>
   <div class="links">Envie de fabriquer tes propres niveaux ? <a href="editor.html">Ouvrir l'éditeur</a></div>
 </main>
 
@@ -114,6 +129,7 @@ const nextBtn = document.getElementById('nextBtn');
 const gameOverOverlay = document.getElementById('gameOverOverlay');
 const restartLevelBtn = document.getElementById('restartLevelBtn');
 const watchAdBtn = document.getElementById('watchAdBtn');
+const guidesBtn = document.getElementById('guidesBtn');
 
 const MAX_LIVES = 3;
 
@@ -122,6 +138,7 @@ let remaining = new Set();
 let history = []; // pile des flèches sorties, pour Annuler
 let moves = 0;
 let lives = MAX_LIVES;
+let guidesOn = false; // affichage des lignes de guidage (direction de sortie de chaque flèche)
 
 function setStatus(msg, bad=false) {
   statusEl.textContent = msg;
@@ -199,6 +216,66 @@ function render() {
   for (const a of level.arrows) {
     if (!remaining.has(a.id)) continue;
     svg.appendChild(buildArrowElement(a));
+  }
+
+  renderGuides();
+}
+
+// Groupe des lignes de guidage : une ligne par flèche encore en jeu, de sa
+// tête jusqu'au bord de la grille, dans sa direction de sortie. Rebâti à
+// chaque render() (nouveau niveau, recommencer, annuler) ; mis à jour aussi
+// ponctuellement quand une flèche sort sans passer par un render() complet
+// (cf. updateGuideForExit ci-dessous).
+function renderGuides() {
+  let g = svg.querySelector('#guidesGroup');
+  if (!g) {
+    g = document.createElementNS(svg.namespaceURI, 'g');
+    g.id = 'guidesGroup';
+    svg.appendChild(g);
+  }
+  g.innerHTML = '';
+  g.style.display = guidesOn ? '' : 'none';
+  if (!guidesOn) return;
+  for (const a of level.arrows) {
+    if (!remaining.has(a.id)) continue;
+    g.appendChild(buildGuideLine(a));
+  }
+}
+
+function buildGuideLine(a) {
+  const { rows, cols } = level.grid;
+  const [hr, hc] = a.path[a.headIndex];
+  const [dr, dc] = DIRS[a.direction];
+  const x1 = hc + 0.5, y1 = hr + 0.5;
+  const x2 = dc !== 0 ? (dc > 0 ? cols : 0) : x1;
+  const y2 = dr !== 0 ? (dr > 0 ? rows : 0) : y1;
+
+  const color = COLORS[a.id % COLORS.length];
+  const line = document.createElementNS(svg.namespaceURI, 'line');
+  line.setAttribute('class', 'guideLine');
+  line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+  line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+  line.setAttribute('stroke', color);
+  line.setAttribute('stroke-width', 0.07);
+  line.setAttribute('opacity', 0.55);
+  return line;
+}
+
+// Retire juste la ligne de guidage d'une flèche qui vient de sortir, sans
+// reconstruire tout le plateau (utilisé après une sortie réussie, qui
+// n'appelle pas render() pour ne pas interrompre l'animation des autres
+// flèches).
+function removeGuideLine(id) {
+  if (!guidesOn) return;
+  const a = level.arrows.find(x => x.id === id);
+  if (!a) return;
+  const g = svg.querySelector('#guidesGroup');
+  if (!g) return;
+  // reconstruit simplement le groupe à partir de `remaining`, déjà à jour
+  g.innerHTML = '';
+  for (const arr of level.arrows) {
+    if (!remaining.has(arr.id)) continue;
+    g.appendChild(buildGuideLine(arr));
   }
 }
 
@@ -299,6 +376,7 @@ function attemptExit(id, groupEl) {
     remaining.delete(id);
     history.push(id);
     moves++;
+    removeGuideLine(id);
     const justWon = remaining.size === 0;
     animateExit(arrow, groupEl, () => {
       if (justWon) {
@@ -349,6 +427,12 @@ nextBtn.addEventListener('click', newLevel);
 undoBtn.addEventListener('click', undo);
 restartLevelBtn.addEventListener('click', restartLevel);
 watchAdBtn.addEventListener('click', watchAdForLives);
+guidesBtn.addEventListener('click', () => {
+  guidesOn = !guidesOn;
+  guidesBtn.classList.toggle('active', guidesOn);
+  guidesBtn.setAttribute('aria-pressed', String(guidesOn));
+  renderGuides();
+});
 
 // Sélection "au plus proche" : on ne demande plus au joueur de viser
 // précisément le trait fin d'une flèche (quasi impossible sur une grille
