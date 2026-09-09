@@ -447,7 +447,7 @@ function pathToPoints(path) {
 // bord de l'écran, au lieu de disparaître brutalement à la limite de la
 // grille (point 9 de la to-do list).
 function boardPadding(rows, cols) {
-  return Math.max(2, Math.round(Math.max(rows, cols) * 0.30));
+  return Math.max(4, Math.round(Math.max(rows, cols) * 0.60));
 }
 
 function render() {
