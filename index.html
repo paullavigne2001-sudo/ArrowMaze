@@ -535,7 +535,7 @@ function animateExit(a, groupEl, onDone) {
   const [dr, dc] = DIRS[a.direction];
   const L = a.path.length;
   const totalT = (L - 1) + Math.max(rows, cols);
-  const duration = Math.min(650, 260 + L * 6);
+  const duration = Math.min(1400, 550 + L * 14);
   const start = performance.now();
 
   const core = groupEl.querySelector('.core');
