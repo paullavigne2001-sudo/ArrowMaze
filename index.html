@@ -36,6 +36,10 @@
     75%{transform:translate(1px,0)}
   }
   .arrow.leaving{pointer-events:none}
+  .arrow.hint{animation:hintPulse .9s ease-in-out infinite}
+  .arrow.hint .core, .arrow.hint .head{filter:drop-shadow(0 0 5px #fff) drop-shadow(0 0 9px #fff)}
+  @keyframes hintPulse{0%,100%{opacity:1}50%{opacity:.45}}
+  #hintBtn[disabled]{opacity:.35}
   #status{min-height:18px;font-size:13px;color:var(--muted)}
   #status.bad{color:var(--bad)}
   .toolbar{display:flex;justify-content:center;gap:10px;width:100%}
@@ -126,6 +130,7 @@
     <span class="badge" id="progress">— / —</span>
     <span class="badge" id="livesBadge">❤️❤️❤️</span>
     <span class="badge" id="movesBadge">0 coups</span>
+    <button id="hintBtn" title="Indice (regarder une pub)" aria-label="Demander un indice en regardant une publicité">💡 Indice · AD</button>
     <button id="homeBtn" title="Retour à l'accueil" aria-label="Retour à l'accueil">🏠</button>
     <button id="undoBtn">Annuler</button>
     <button id="newBtn">Nouveau niveau</button>
@@ -188,6 +193,7 @@ const gameOverOverlay = document.getElementById('gameOverOverlay');
 const restartLevelBtn = document.getElementById('restartLevelBtn');
 const watchAdBtn = document.getElementById('watchAdBtn');
 const guidesBtn = document.getElementById('guidesBtn');
+const hintBtn = document.getElementById('hintBtn');
 
 // --- Écran d'accueil ---
 const homeScreen = document.getElementById('homeScreen');
@@ -301,6 +307,7 @@ let history = []; // pile des flèches sorties, pour Annuler
 let moves = 0;
 let lives = MAX_LIVES;
 let guidesOn = false; // affichage des lignes de guidage (direction de sortie de chaque flèche)
+let hintActive = false; // surbrillance "indice" en cours (disparaît au coup suivant)
 
 function setStatus(msg, bad=false) {
   statusEl.textContent = msg;
@@ -319,6 +326,7 @@ async function newLevel() {
   history = [];
   moves = 0;
   lives = MAX_LIVES;
+  hintActive = false;
   render();
   updateHud();
   setStatus('Prêt.');
@@ -333,9 +341,42 @@ function restartLevel() {
   history = [];
   moves = 0;
   lives = MAX_LIVES;
+  hintActive = false;
   render();
   updateHud();
   setStatus('Niveau recommencé.');
+}
+
+// Point d'accroche pour un futur SDK publicitaire (même principe que
+// watchAdForLives() ci-dessus) : pour l'instant aucune pub n'est réellement
+// diffusée, les flèches jouables sont simplement mises en surbrillance. Quand
+// le SDK sera branché, remplacer le corps de watchAdForHint() par l'appel
+// réel, et n'appeler applyHint() que dans le callback de récompense.
+function watchAdForHint() {
+  if (!level || !remaining.size || lives <= 0) return;
+  // TODO(pub): showRewardedAd().then(applyHint).catch(() => {/* pub non vue */});
+  applyHint();
+}
+
+// Met en surbrillance toutes les flèches actuellement jouables (celles dont
+// le chemin de sortie est libre). L'effet est retiré au prochain coup joué,
+// qu'il soit réussi ou bloqué (voir attemptExit ci-dessous).
+function applyHint() {
+  clearHint();
+  hintActive = true;
+  for (const id of remaining) {
+    if (canExit(level, id, remaining)) {
+      const el = svg.querySelector(`.arrow[data-id="${id}"]`);
+      if (el) el.classList.add('hint');
+    }
+  }
+  setStatus('Indice : les flèches en surbrillance peuvent sortir.');
+}
+
+function clearHint() {
+  if (!hintActive) return;
+  hintActive = false;
+  svg.querySelectorAll('.arrow.hint').forEach(el => el.classList.remove('hint'));
 }
 
 // Recharge les vies sans toucher à la progression en cours (flèches déjà
@@ -357,6 +398,12 @@ function grantLives() {
   gameOverOverlay.classList.remove('show');
   updateHud();
   setStatus('Vies rechargées — à toi de jouer.');
+}
+
+// Retour haptique léger, activable/désactivable via Paramètres → Vibration.
+function vibrate(pattern) {
+  if (localStorage.getItem('am_vibration') === 'off') return;
+  if (navigator.vibrate) navigator.vibrate(pattern);
 }
 
 function pathToPoints(path) {
@@ -533,6 +580,7 @@ function animateExit(a, groupEl, onDone) {
 
 function attemptExit(id, groupEl) {
   if (!remaining.has(id)) return;
+  clearHint(); // un coup vient d'être joué : l'indice ne vaut plus
   if (canExit(level, id, remaining)) {
     const arrow = level.arrows.find(x => x.id === id);
     remaining.delete(id);
@@ -540,6 +588,7 @@ function attemptExit(id, groupEl) {
     moves++;
     removeGuideLine(id);
     const justWon = remaining.size === 0;
+    vibrate(15);
     animateExit(arrow, groupEl, () => {
       if (justWon) {
         recordLevelCompleted();
@@ -553,6 +602,7 @@ function attemptExit(id, groupEl) {
     groupEl.classList.remove('blocked');
     void groupEl.offsetWidth; // relance l'animation
     groupEl.classList.add('blocked');
+    vibrate([0, 40, 30, 40]);
     lives = Math.max(0, lives - 1);
     updateHud();
     if (lives <= 0) {
@@ -590,6 +640,7 @@ nextBtn.addEventListener('click', newLevel);
 undoBtn.addEventListener('click', undo);
 restartLevelBtn.addEventListener('click', restartLevel);
 watchAdBtn.addEventListener('click', watchAdForLives);
+hintBtn.addEventListener('click', watchAdForHint);
 guidesBtn.addEventListener('click', () => {
   guidesOn = !guidesOn;
   guidesBtn.classList.toggle('active', guidesOn);
