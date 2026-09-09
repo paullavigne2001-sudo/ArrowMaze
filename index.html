@@ -80,7 +80,6 @@
   #movesBadge,
   #undoBtn,
   #newBtn,
-  #homeBtn,
   #status{display:none}
   #gameMain .links{display:none}
 
@@ -149,18 +148,29 @@
     <div class="sub">Touche une flèche pour la faire sortir — son chemin de sortie doit être libre.</div>
   </div>
   <div class="hud">
+    <button id="homeBtn" class="iconBtn" type="button" title="Retour à l'accueil" aria-label="Retour à l'accueil">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="19" y1="12" x2="5" y2="12"/>
+        <polyline points="11 5 4 12 11 19"/>
+      </svg>
+    </button>
     <span class="badge" id="progress">— / —</span>
     <span class="badge" id="livesBadge">❤️❤️❤️</span>
     <button id="guidesBtn" class="iconBtn" type="button" title="Lignes de guidage" aria-pressed="false" aria-label="Afficher ou masquer les lignes de guidage">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-        <line x1="4" y1="7" x2="20" y2="7"/>
-        <line x1="4" y1="12" x2="15" y2="12"/>
-        <line x1="4" y1="17" x2="18" y2="17"/>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3.5" y="3.5" width="4.5" height="4.5" rx="0.6"/>
+        <rect x="9.75" y="3.5" width="4.5" height="4.5" rx="0.6"/>
+        <rect x="16" y="3.5" width="4.5" height="4.5" rx="0.6"/>
+        <rect x="3.5" y="9.75" width="4.5" height="4.5" rx="0.6"/>
+        <rect x="9.75" y="9.75" width="4.5" height="4.5" rx="0.6"/>
+        <rect x="16" y="9.75" width="4.5" height="4.5" rx="0.6"/>
+        <rect x="3.5" y="16" width="4.5" height="4.5" rx="0.6"/>
+        <rect x="9.75" y="16" width="4.5" height="4.5" rx="0.6"/>
+        <rect x="16" y="16" width="4.5" height="4.5" rx="0.6"/>
       </svg>
     </button>
     <span class="badge" id="movesBadge">0 coups</span>
     <button id="hintBtn" title="Indice (regarder une pub)" aria-label="Demander un indice en regardant une publicité">💡 Indice · AD</button>
-    <button id="homeBtn" title="Retour à l'accueil" aria-label="Retour à l'accueil">🏠</button>
     <button id="undoBtn">Annuler</button>
     <button id="newBtn">Nouveau niveau</button>
   </div>
@@ -437,7 +447,7 @@ function pathToPoints(path) {
 // bord de l'écran, au lieu de disparaître brutalement à la limite de la
 // grille (point 9 de la to-do list).
 function boardPadding(rows, cols) {
-  return Math.max(2, Math.round(Math.max(rows, cols) * 0.10));
+  return Math.max(2, Math.round(Math.max(rows, cols) * 0.30));
 }
 
 function render() {
