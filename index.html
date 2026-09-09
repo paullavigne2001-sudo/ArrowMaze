@@ -56,11 +56,68 @@
   .links{color:var(--muted);font-size:12px}
   .links a{color:inherit}
   #loading{color:var(--muted);font-size:13px}
+  .hidden{display:none !important}
+
+  /* Écran d'accueil */
+  .home{min-height:100vh;width:100%;display:flex;align-items:center;justify-content:center;padding:24px}
+  .home-card{width:min(92vw,360px);display:flex;flex-direction:column;align-items:center;gap:18px;text-align:center}
+  .home-title{margin:0;font-size:30px}
+  .home-sub{margin:0;color:var(--muted);font-size:13px}
+  .player{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--border);
+          border-radius:14px;padding:10px 14px;width:100%}
+  .avatar{width:44px;height:44px;min-width:44px;border-radius:50%;background:var(--accent);border:1px solid var(--border);
+          font-size:22px;display:flex;align-items:center;justify-content:center;padding:0}
+  .player-name{display:flex;align-items:center;gap:6px;flex:1;min-width:0}
+  .player-name input{flex:1;min-width:0;background:transparent;border:none;color:var(--text);font:inherit;
+                      font-weight:700;font-size:15px;padding:6px 2px}
+  .player-name input:focus{outline:none;border-bottom:1px solid var(--accent)}
+  #randomNameBtn{width:36px;min-width:36px;padding:0;font-size:16px}
+  .progress-block{width:100%;text-align:left}
+  .progress-label{font-size:12px;color:var(--muted);margin-bottom:6px}
+  .progress-bar{width:100%;height:10px;border-radius:999px;background:var(--panel);border:1px solid var(--border);overflow:hidden}
+  .progress-fill{height:100%;background:var(--accent);border-radius:999px;transition:width .25s ease}
+  .play-btn{width:100%;font-size:17px;padding:14px}
+  .settings-btn{width:100%;background:transparent}
+  .toggleRow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 2px;font-size:14px}
 </style>
 </head>
 <body>
 
-<header>
+<div id="homeScreen" class="home">
+  <div class="home-card">
+    <h1 class="home-title">🧩 ArrowMaze</h1>
+    <p class="home-sub">Libère toutes les flèches, une par une.</p>
+
+    <div class="player">
+      <button id="avatarBtn" class="avatar" type="button" title="Changer d'avatar" aria-label="Changer d'avatar">🙂</button>
+      <div class="player-name">
+        <input id="playerNameInput" type="text" maxlength="18" aria-label="Nom du joueur">
+        <button id="randomNameBtn" type="button" title="Nom aléatoire" aria-label="Proposer un nom aléatoire">🎲</button>
+      </div>
+    </div>
+
+    <div class="progress-block">
+      <div class="progress-label" id="homeProgressLabel">Niveau 1</div>
+      <div class="progress-bar"><div class="progress-fill" id="homeProgressFill" style="width:0%"></div></div>
+    </div>
+
+    <button class="primary play-btn" id="playBtn" type="button">▶ PLAY</button>
+    <button class="settings-btn" id="settingsBtn" type="button">⚙️ Paramètres</button>
+  </div>
+</div>
+
+<div id="settingsOverlay" class="overlay">
+  <div class="card">
+    <h2>Paramètres</h2>
+    <div class="stack">
+      <label class="toggleRow"><span>🔊 Son</span><input type="checkbox" id="soundToggle"></label>
+      <label class="toggleRow"><span>📳 Vibration</span><input type="checkbox" id="vibrationToggle"></label>
+      <button class="primary" id="closeSettingsBtn">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<header class="hidden" id="gameHeader">
   <div>
     <h1>🧩 ArrowMaze</h1>
     <div class="sub">Touche une flèche pour la faire sortir — son chemin de sortie doit être libre.</div>
@@ -69,12 +126,13 @@
     <span class="badge" id="progress">— / —</span>
     <span class="badge" id="livesBadge">❤️❤️❤️</span>
     <span class="badge" id="movesBadge">0 coups</span>
+    <button id="homeBtn" title="Retour à l'accueil" aria-label="Retour à l'accueil">🏠</button>
     <button id="undoBtn">Annuler</button>
     <button id="newBtn">Nouveau niveau</button>
   </div>
 </header>
 
-<main>
+<main class="hidden" id="gameMain">
   <div id="boardWrap">
     <svg id="board" viewBox="0 0 40 40"></svg>
   </div>
@@ -130,6 +188,110 @@ const gameOverOverlay = document.getElementById('gameOverOverlay');
 const restartLevelBtn = document.getElementById('restartLevelBtn');
 const watchAdBtn = document.getElementById('watchAdBtn');
 const guidesBtn = document.getElementById('guidesBtn');
+
+// --- Écran d'accueil ---
+const homeScreen = document.getElementById('homeScreen');
+const gameHeader = document.getElementById('gameHeader');
+const gameMain = document.getElementById('gameMain');
+const playBtn = document.getElementById('playBtn');
+const homeBtn = document.getElementById('homeBtn');
+const avatarBtn = document.getElementById('avatarBtn');
+const playerNameInput = document.getElementById('playerNameInput');
+const randomNameBtn = document.getElementById('randomNameBtn');
+const homeProgressLabel = document.getElementById('homeProgressLabel');
+const homeProgressFill = document.getElementById('homeProgressFill');
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsOverlay = document.getElementById('settingsOverlay');
+const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+const soundToggle = document.getElementById('soundToggle');
+const vibrationToggle = document.getElementById('vibrationToggle');
+
+const AVATARS = ['🙂','🦊','🐼','🐸','🐙','🦁','🐨','🤖','👾','🥷'];
+const NAME_ADJ = ['Rapide','Malin','Brave','Vif','Zen','Rusé','Agile','Curieux'];
+const NAME_NOUN = ['Renard','Faucon','Panda','Lynx','Corbeau','Loup','Tigre','Colibri'];
+
+function loadPlayerProfile() {
+  return {
+    name: localStorage.getItem('am_playerName') || randomName(),
+    avatar: localStorage.getItem('am_avatar') || AVATARS[0],
+    level: parseInt(localStorage.getItem('am_levelNumber') || '1', 10),
+  };
+}
+function randomName() {
+  const a = NAME_ADJ[Math.floor(Math.random() * NAME_ADJ.length)];
+  const n = NAME_NOUN[Math.floor(Math.random() * NAME_NOUN.length)];
+  return `${a} ${n}`;
+}
+
+const profile = loadPlayerProfile();
+
+function refreshHomeScreen() {
+  playerNameInput.value = profile.name;
+  avatarBtn.textContent = profile.avatar;
+  const perWorld = 10;
+  const posInWorld = ((profile.level - 1) % perWorld) + 1;
+  const world = Math.ceil(profile.level / perWorld);
+  homeProgressLabel.textContent = `Niveau ${profile.level} — Monde ${world}`;
+  homeProgressFill.style.width = `${(posInWorld / perWorld) * 100}%`;
+}
+
+function showHome() {
+  homeScreen.classList.remove('hidden');
+  gameHeader.classList.add('hidden');
+  gameMain.classList.add('hidden');
+  refreshHomeScreen();
+}
+
+function showGame() {
+  homeScreen.classList.add('hidden');
+  gameHeader.classList.remove('hidden');
+  gameMain.classList.remove('hidden');
+}
+
+avatarBtn.addEventListener('click', () => {
+  const i = AVATARS.indexOf(profile.avatar);
+  profile.avatar = AVATARS[(i + 1) % AVATARS.length];
+  localStorage.setItem('am_avatar', profile.avatar);
+  avatarBtn.textContent = profile.avatar;
+});
+
+playerNameInput.addEventListener('change', () => {
+  const v = playerNameInput.value.trim();
+  profile.name = v || randomName();
+  playerNameInput.value = profile.name;
+  localStorage.setItem('am_playerName', profile.name);
+});
+
+randomNameBtn.addEventListener('click', () => {
+  profile.name = randomName();
+  playerNameInput.value = profile.name;
+  localStorage.setItem('am_playerName', profile.name);
+});
+
+playBtn.addEventListener('click', () => {
+  showGame();
+  if (!level) newLevel();
+});
+
+homeBtn.addEventListener('click', showHome);
+
+settingsBtn.addEventListener('click', () => {
+  soundToggle.checked = localStorage.getItem('am_sound') !== 'off';
+  vibrationToggle.checked = localStorage.getItem('am_vibration') !== 'off';
+  settingsOverlay.classList.add('show');
+});
+closeSettingsBtn.addEventListener('click', () => settingsOverlay.classList.remove('show'));
+soundToggle.addEventListener('change', () => {
+  localStorage.setItem('am_sound', soundToggle.checked ? 'on' : 'off');
+});
+vibrationToggle.addEventListener('change', () => {
+  localStorage.setItem('am_vibration', vibrationToggle.checked ? 'on' : 'off');
+});
+
+function recordLevelCompleted() {
+  profile.level += 1;
+  localStorage.setItem('am_levelNumber', String(profile.level));
+}
 
 const MAX_LIVES = 3;
 
@@ -380,6 +542,7 @@ function attemptExit(id, groupEl) {
     const justWon = remaining.size === 0;
     animateExit(arrow, groupEl, () => {
       if (justWon) {
+        recordLevelCompleted();
         overlayText.textContent = `Toutes les flèches sont sorties en ${moves} coups.`;
         overlay.classList.add('show');
       }
@@ -473,7 +636,7 @@ svg.addEventListener('click', (evt) => {
   if (groupEl) attemptExit(id, groupEl);
 });
 
-newLevel();
+showHome();
 </script>
 </body>
 </html>
