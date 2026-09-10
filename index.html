@@ -109,6 +109,8 @@
   .segmented button{flex:1;padding:8px 6px;font-size:12.5px;font-weight:600;border-radius:8px;
                      border:1px solid var(--border);background:var(--bg);color:var(--muted)}
   .segmented button.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  .segmented.disabled{opacity:.4}
+  .segmented button:disabled{cursor:default}
 </style>
 </head>
 <body>
@@ -180,6 +182,12 @@
         <rect x="3.5" y="16" width="4.5" height="4.5" rx="0.6"/>
         <rect x="9.75" y="16" width="4.5" height="4.5" rx="0.6"/>
         <rect x="16" y="16" width="4.5" height="4.5" rx="0.6"/>
+      </svg>
+    </button>
+    <button id="bwModeBtn" class="iconBtn" type="button" title="Mode noir et blanc" aria-pressed="false" aria-label="Basculer entre le mode couleur et le mode noir et blanc">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="9"/>
+        <path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/>
       </svg>
     </button>
     <span class="badge" id="movesBadge">0 coups</span>
@@ -396,13 +404,25 @@ function softenColor(hex, amount) {
 const COMFORT_AMOUNT = { vif: 0, confort: 0.4, doux: 0.75 };
 let colorComfort = localStorage.getItem('am_colorComfort') || 'confort';
 
+// Mode d'affichage : 'color' (paires de couleurs du niveau, cf. ci-dessus)
+// ou 'bw' (fond noir, flèche blanche — contraste maximal, aucune couleur).
+let displayMode = localStorage.getItem('am_displayMode') || 'color';
+
 // Applique la paire de couleurs du niveau courant : fond de l'écran de jeu
 // (var(--bg), visible à travers #boardWrap qui est transparent), couleur
 // commune à toutes les flèches du niveau, et couleur des points de grille
 // recalculée pour rester lisible sur ce fond. Les couleurs sont adoucies
 // selon le réglage de confort visuel choisi ; les flèches restent un peu
-// plus vives que le fond pour rester bien identifiables.
+// plus vives que le fond pour rester bien identifiables. En mode noir et
+// blanc, la paire du niveau et le confort sont ignorés : fond noir, flèche
+// blanche, quel que soit le niveau.
 function applyLevelColors(pair) {
+  if (displayMode === 'bw') {
+    document.documentElement.style.setProperty('--bg', '#000000');
+    document.documentElement.style.setProperty('--dot', 'rgba(255,255,255,0.55)');
+    arrowColor = '#ffffff';
+    return;
+  }
   const amount = COMFORT_AMOUNT[colorComfort] ?? COMFORT_AMOUNT.confort;
   const bg = softenColor(pair.bg, amount);
   const arrow = softenColor(pair.arrow, amount * 0.5);
@@ -429,6 +449,7 @@ const restartLevelBtn = document.getElementById('restartLevelBtn');
 const watchAdBtn = document.getElementById('watchAdBtn');
 const guidesBtn = document.getElementById('guidesBtn');
 const hintBtn = document.getElementById('hintBtn');
+const bwModeBtn = document.getElementById('bwModeBtn');
 
 // --- Écran d'accueil ---
 const homeScreen = document.getElementById('homeScreen');
@@ -533,7 +554,12 @@ vibrationToggle.addEventListener('change', () => {
 });
 
 function refreshComfortButtons() {
-  comfortButtons.forEach(b => b.classList.toggle('active', b.dataset.comfort === colorComfort));
+  const disabled = displayMode === 'bw';
+  comfortSegmented.classList.toggle('disabled', disabled);
+  comfortButtons.forEach(b => {
+    b.classList.toggle('active', b.dataset.comfort === colorComfort);
+    b.disabled = disabled;
+  });
 }
 comfortButtons.forEach(b => {
   b.addEventListener('click', () => {
@@ -969,6 +995,25 @@ guidesBtn.addEventListener('click', () => {
   guidesBtn.classList.toggle('active', guidesOn);
   guidesBtn.setAttribute('aria-pressed', String(guidesOn));
   renderGuides();
+});
+
+function refreshBwButton() {
+  const active = displayMode === 'bw';
+  bwModeBtn.classList.toggle('active', active);
+  bwModeBtn.setAttribute('aria-pressed', String(active));
+}
+refreshBwButton();
+
+bwModeBtn.addEventListener('click', () => {
+  displayMode = displayMode === 'bw' ? 'color' : 'bw';
+  localStorage.setItem('am_displayMode', displayMode);
+  refreshBwButton();
+  refreshComfortButtons();
+  // ré-applique immédiatement, sans toucher à l'état du jeu (vies, coups, grille)
+  if (level) {
+    applyLevelColors(getColorPairForLevel(profile.level));
+    render();
+  }
 });
 
 // Sélection "au plus proche" : on ne demande plus au joueur de viser
