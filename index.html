@@ -55,6 +55,7 @@
            padding:0;border-radius:12px;background:var(--panel);border:1px solid var(--border);color:var(--muted)}
   .iconBtn svg{width:22px;height:22px}
   .iconBtn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  .iconBtn.light{background:#ffffff;border-color:#ffffff;color:#111}
   .guideLine{pointer-events:none;stroke-dasharray:0.16 0.18;stroke-linecap:round}
   .overlay{position:fixed;inset:0;background:#000c;display:none;align-items:center;justify-content:center;z-index:10}
   .overlay.show{display:flex}
@@ -184,7 +185,7 @@
         <rect x="16" y="16" width="4.5" height="4.5" rx="0.6"/>
       </svg>
     </button>
-    <button id="bwModeBtn" class="iconBtn" type="button" title="Mode noir et blanc" aria-pressed="false" aria-label="Basculer entre le mode couleur et le mode noir et blanc">
+    <button id="bwModeBtn" class="iconBtn" type="button" title="Mode d'affichage" aria-label="Changer le mode d'affichage (couleur, noir et blanc, blanc et noir)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="9"/>
         <path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/>
@@ -404,9 +405,12 @@ function softenColor(hex, amount) {
 const COMFORT_AMOUNT = { vif: 0, confort: 0.4, doux: 0.75 };
 let colorComfort = localStorage.getItem('am_colorComfort') || 'confort';
 
-// Mode d'affichage : 'color' (paires de couleurs du niveau, cf. ci-dessus)
-// ou 'bw' (fond noir, flèche blanche — contraste maximal, aucune couleur).
+// Mode d'affichage : 'color' (paires de couleurs du niveau, cf. ci-dessus),
+// 'bw' (fond noir, flèche blanche) ou 'wb' (fond blanc, flèche noire — pour
+// une ambiance très lumineuse). Aucune couleur dans ces deux derniers modes.
+const DISPLAY_MODES = ['color', 'bw', 'wb'];
 let displayMode = localStorage.getItem('am_displayMode') || 'color';
+if (!DISPLAY_MODES.includes(displayMode)) displayMode = 'color';
 
 // Applique la paire de couleurs du niveau courant : fond de l'écran de jeu
 // (var(--bg), visible à travers #boardWrap qui est transparent), couleur
@@ -421,6 +425,12 @@ function applyLevelColors(pair) {
     document.documentElement.style.setProperty('--bg', '#000000');
     document.documentElement.style.setProperty('--dot', 'rgba(255,255,255,0.55)');
     arrowColor = '#ffffff';
+    return;
+  }
+  if (displayMode === 'wb') {
+    document.documentElement.style.setProperty('--bg', '#ffffff');
+    document.documentElement.style.setProperty('--dot', 'rgba(0,0,0,0.45)');
+    arrowColor = '#000000';
     return;
   }
   const amount = COMFORT_AMOUNT[colorComfort] ?? COMFORT_AMOUNT.confort;
@@ -554,7 +564,7 @@ vibrationToggle.addEventListener('change', () => {
 });
 
 function refreshComfortButtons() {
-  const disabled = displayMode === 'bw';
+  const disabled = displayMode !== 'color';
   comfortSegmented.classList.toggle('disabled', disabled);
   comfortButtons.forEach(b => {
     b.classList.toggle('active', b.dataset.comfort === colorComfort);
@@ -997,15 +1007,20 @@ guidesBtn.addEventListener('click', () => {
   renderGuides();
 });
 
+const MODE_LABELS = { color: 'Couleur', bw: 'Noir et blanc', wb: 'Mode clair' };
+
 function refreshBwButton() {
-  const active = displayMode === 'bw';
-  bwModeBtn.classList.toggle('active', active);
-  bwModeBtn.setAttribute('aria-pressed', String(active));
+  bwModeBtn.classList.toggle('active', displayMode === 'bw');
+  bwModeBtn.classList.toggle('light', displayMode === 'wb');
+  const label = `Mode d'affichage : ${MODE_LABELS[displayMode]}`;
+  bwModeBtn.title = label;
+  bwModeBtn.setAttribute('aria-label', `${label} — toucher pour changer`);
 }
 refreshBwButton();
 
 bwModeBtn.addEventListener('click', () => {
-  displayMode = displayMode === 'bw' ? 'color' : 'bw';
+  const idx = DISPLAY_MODES.indexOf(displayMode);
+  displayMode = DISPLAY_MODES[(idx + 1) % DISPLAY_MODES.length];
   localStorage.setItem('am_displayMode', displayMode);
   refreshBwButton();
   refreshComfortButtons();
