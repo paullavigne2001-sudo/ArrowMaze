@@ -47,13 +47,8 @@
   .arrow{cursor:pointer}
   .arrow polyline.core{stroke-linecap:round;stroke-linejoin:round;fill:none;pointer-events:none}
   .arrow polyline.outline{stroke:#00000055;stroke-linecap:round;stroke-linejoin:round;fill:none;pointer-events:none}
-  .arrow.blocked{animation:shake .28s ease}
-  @keyframes shake{
-    0%,100%{transform:translate(0,0)}
-    25%{transform:translate(-1px,0)}
-    75%{transform:translate(1px,0)}
-  }
   .arrow.leaving{pointer-events:none}
+  .arrow.bouncing{pointer-events:none}
   .arrow.hint{animation:hintPulse .9s ease-in-out infinite}
   .arrow.hint .core, .arrow.hint .head{filter:drop-shadow(0 0 5px #fff) drop-shadow(0 0 9px #fff)}
   @keyframes hintPulse{0%,100%{opacity:1}50%{opacity:.45}}
@@ -245,7 +240,7 @@
 </div>
 
 <script type="module">
-import { generateLevel, canExit, DIRS } from './engine.js';
+import { generateLevel, canExit, DIRS, rayCells } from './engine.js';
 
 // 30 paires de couleurs (fond froid / flèche chaude) fournies par le design.
 // Une seule paire est utilisée par niveau : toutes les flèches du niveau
@@ -987,7 +982,6 @@ function animateExit(a, groupEl, onDone) {
   const outline = groupEl.querySelector('.outline');
   const headEl = groupEl.querySelector('.head');
   groupEl.classList.add('leaving');
-  groupEl.classList.remove('blocked');
 
   function posAt(k) {
     if (k >= 0) {
@@ -1023,6 +1017,104 @@ function animateExit(a, groupEl, onDone) {
   requestAnimationFrame(frame);
 }
 
+// Distance (en cases, fraction comprise) que la tête de la flèche peut
+// parcourir dans sa direction de sortie avant de toucher le premier
+// obstacle (une autre flèche encore en jeu). S'arrête juste avant d'entrer
+// dans la case qui bloque, comme si elle butait dessus.
+function blockedTravelSteps(arrow) {
+  const { rows, cols } = level.grid;
+  const head = arrow.path[arrow.headIndex];
+  const cells = rayCells(head, arrow.direction, rows, cols);
+  for (let i = 0; i < cells.length; i++) {
+    const [r, c] = cells[i];
+    if (isCellOccupied(r, c, arrow.id)) return i + 0.25;
+  }
+  // Filet de sécurité (ne devrait pas arriver puisque canExit() a renvoyé
+  // false) : si rien ne bloque, on la laisse aller jusqu'au bord.
+  return cells.length;
+}
+
+function isCellOccupied(r, c, excludeId) {
+  for (const id of remaining) {
+    if (id === excludeId) continue;
+    const a = level.arrows.find(x => x.id === id);
+    for (const [pr, pc] of a.path) {
+      if (pr === r && pc === c) return true;
+    }
+  }
+  return false;
+}
+
+// Anime une flèche bloquée : elle commence à sortir exactement comme
+// animateExit (même tracé, même logique de déplacement), mais s'arrête dès
+// qu'elle touche l'obstacle puis revient à sa place de départ en repassant
+// par le même chemin (simple symétrie temporelle de la même trajectoire).
+function animateBounce(a, groupEl, maxSteps, onDone) {
+  const [dr, dc] = DIRS[a.direction];
+  const L = a.path.length;
+
+  const core = groupEl.querySelector('.core');
+  const outline = groupEl.querySelector('.outline');
+  const headEl = groupEl.querySelector('.head');
+  groupEl.classList.add('bouncing');
+
+  function posAt(k) {
+    if (k >= 0) {
+      const k0 = Math.min(Math.floor(k), L - 1);
+      const k1 = Math.min(k0 + 1, L - 1);
+      const frac = k - k0;
+      const [r0, c0] = a.path[k0];
+      const [r1, c1] = a.path[k1];
+      return [r0 + (r1 - r0) * frac, c0 + (c1 - c0) * frac];
+    }
+    const steps = -k;
+    const [hr, hc] = a.path[0];
+    return [hr + dr * steps, hc + dc * steps];
+  }
+
+  function paint(t) {
+    const pts = [];
+    for (let i = 0; i < L; i++) pts.push(posAt(i - t));
+    const ptsStr = pts.map(([r, c]) => `${c + 0.5},${r + 0.5}`).join(' ');
+    core.setAttribute('points', ptsStr);
+    outline.setAttribute('points', ptsStr);
+    const [hr, hc] = pts[0];
+    headEl.setAttribute('transform', `translate(${hc + 0.5} ${hr + 0.5}) rotate(${DIR_ANGLE[a.direction]})`);
+  }
+
+  // Durée proportionnelle à la distance parcourue avant contact (aller et
+  // retour), avec un minimum pour rester perceptible même quand l'obstacle
+  // est juste à côté de la tête.
+  const outDuration = Math.max(140, Math.min(650, maxSteps * 90));
+  const backDuration = outDuration * 0.8; // le retour est un peu plus rapide que l'aller
+  let phase = 'out';
+  let phaseStart = performance.now();
+
+  function frame(now) {
+    if (phase === 'out') {
+      const t = Math.min(1, (now - phaseStart) / outDuration) * maxSteps;
+      paint(t);
+      if (now - phaseStart >= outDuration) {
+        vibrate(12); // petit retour haptique au moment du contact avec l'obstacle
+        phase = 'back';
+        phaseStart = now;
+      }
+      requestAnimationFrame(frame);
+    } else {
+      const t = maxSteps - Math.min(1, (now - phaseStart) / backDuration) * maxSteps;
+      paint(t);
+      if (now - phaseStart >= backDuration) {
+        paint(0);
+        groupEl.classList.remove('bouncing');
+        if (onDone) onDone();
+      } else {
+        requestAnimationFrame(frame);
+      }
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
 function attemptExit(id, groupEl) {
   if (!remaining.has(id)) return;
   clearHint(); // un coup vient d'être joué : l'indice ne vaut plus
@@ -1044,12 +1136,12 @@ function attemptExit(id, groupEl) {
     updateHud();
     setStatus('Prêt.');
   } else {
-    groupEl.classList.remove('blocked');
-    void groupEl.offsetWidth; // relance l'animation
-    groupEl.classList.add('blocked');
+    const arrow = level.arrows.find(x => x.id === id);
+    const maxSteps = blockedTravelSteps(arrow);
     vibrate([0, 40, 30, 40]);
     lives = Math.max(0, lives - 1);
     updateHud();
+    animateBounce(arrow, groupEl, maxSteps);
     if (lives <= 0) {
       setStatus('Vies épuisées.', true);
       gameOverOverlay.classList.add('show');
