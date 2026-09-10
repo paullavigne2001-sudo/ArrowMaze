@@ -470,6 +470,41 @@ function applyLevelColors(pair) {
 
 const DIR_ANGLE = { up: 0, right: 90, down: 180, left: 270 };
 
+// --- Niveaux enchaînés à taille de grille variable ---------------------
+// Au lieu de régénérer une grille 40×40 aléatoire à chaque partie, la
+// taille de la grille est désormais déterminée par le numéro de niveau du
+// joueur (profile.level), en suivant une séquence de tailles qui varie
+// pour éviter la routine (cf. tableau du cahier des charges). La séquence
+// boucle une fois épuisée, mais l'agencement des flèches reste tiré au
+// hasard à chaque génération (seed basée sur l'horloge).
+const LEVEL_SIZES = [
+  { rows: 32, cols: 22 },
+  { rows: 46, cols: 32 },
+  { rows: 28, cols: 18 },
+  { rows: 43, cols: 38 },
+  { rows: 32, cols: 32 },
+  { rows: 28, cols: 18 },
+  { rows: 40, cols: 40 },
+  { rows: 36, cols: 26 },
+  { rows: 24, cols: 34 },
+  { rows: 38, cols: 28 },
+];
+
+// Densité de référence : 60 flèches pour une grille 40×40 (1600 cases),
+// soit ~26,67 cases par flèche. Le nombre de flèches d'un niveau est
+// recalculé à partir de cette densité pour que la difficulté reste
+// cohérente quelle que soit la taille de la grille.
+const CELLS_PER_ARROW = (40 * 40) / 60;
+
+function sizeForLevel(levelNumber) {
+  const i = Math.max(0, (levelNumber - 1)) % LEVEL_SIZES.length;
+  return LEVEL_SIZES[i];
+}
+
+function arrowCountForSize(rows, cols) {
+  return Math.max(20, Math.round((rows * cols) / CELLS_PER_ARROW));
+}
+
 const svg = document.getElementById('board');
 const boardWrap = document.getElementById('boardWrap');
 const statusEl = document.getElementById('status');
@@ -636,13 +671,15 @@ function setStatus(msg, bad=false) {
 }
 
 async function newLevel() {
-  setStatus('Génération du niveau…');
+  const { rows, cols } = sizeForLevel(profile.level);
+  const arrows = arrowCountForSize(rows, cols);
+  setStatus(`Génération du niveau ${profile.level} (${cols}×${rows})…`);
   overlay.classList.remove('show');
   gameOverOverlay.classList.remove('show');
   // laisse le message "génération…" s'afficher avant le calcul (bloquant mais bref)
   await new Promise(r => setTimeout(r, 20));
   const seed = Date.now() ^ Math.floor(Math.random() * 1e9);
-  level = generateLevel({ seed, arrows: 60, fast: true });
+  level = generateLevel({ seed, rows, cols, arrows, fast: true });
   remaining = new Set(level.arrows.map(a => a.id));
   history = [];
   moves = 0;
