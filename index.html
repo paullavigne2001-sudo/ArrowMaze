@@ -8,17 +8,18 @@
   :root{
     --bg:#0c1116; --panel:#141b22; --border:#26323c; --text:#eef4f7; --muted:#8fa2ad;
     --accent:#8b5cf6; --ok:#34d399; --bad:#fb7185; --dot:#26323c;
+    --chrome:#141b22; --chrome-ink:#eef4f7;
   }
   *{box-sizing:border-box}
   html,body{height:100%}
   body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif;
        height:100vh;overflow:hidden;display:flex;flex-direction:column;align-items:center}
-  header{width:100%;padding:14px 18px;border-bottom:1px solid var(--border);background:#0f161d;
+  header{width:100%;padding:14px 18px;border-bottom:1px solid var(--chrome);background:var(--chrome);color:var(--chrome-ink);
          display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
   header h1{margin:0;font-size:19px}
   header .sub{color:var(--muted);font-size:12px}
   .hud{display:flex;gap:10px;align-items:center;font-size:13px}
-  .badge{background:var(--panel);border:1px solid var(--border);border-radius:999px;padding:6px 12px}
+  .badge{background:var(--chrome);border:1px solid var(--chrome);color:var(--chrome-ink);border-radius:999px;padding:6px 12px}
   button{cursor:pointer;font:inherit;font-weight:700;border-radius:9px;border:1px solid var(--border);
          background:var(--panel);color:var(--text);padding:9px 14px}
   button.primary{background:var(--accent);border-color:var(--accent)}
@@ -54,6 +55,13 @@
   .iconBtn{display:flex;align-items:center;justify-content:center;width:44px;height:44px;
            padding:0;border-radius:12px;background:var(--panel);border:1px solid var(--border);color:var(--muted)}
   .iconBtn svg{width:22px;height:22px}
+  /* Dans le header de jeu, boutons et badges se fondent avec le fond du
+     niveau (--chrome suit --bg, voir applyLevelColors) ; l'icône/texte
+     utilise --chrome-ink, une couleur noire ou blanche calculée pour rester
+     lisible quel que soit ce fond. */
+  #gameHeader button{background:var(--chrome);border-color:var(--chrome);color:var(--chrome-ink)}
+  #gameHeader .iconBtn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  #gameHeader .iconBtn.light{background:#ffffff;border-color:#ffffff;color:#111}
   .iconBtn.active{background:var(--accent);border-color:var(--accent);color:#fff}
   .iconBtn.light{background:#ffffff;border-color:#ffffff;color:#111}
   .guideLine{pointer-events:none;stroke-dasharray:0.16 0.18;stroke-linecap:round}
@@ -414,32 +422,49 @@ const DISPLAY_MODES = ['color', 'bw', 'wb'];
 let displayMode = localStorage.getItem('am_displayMode') || 'color';
 if (!DISPLAY_MODES.includes(displayMode)) displayMode = 'color';
 
-// Applique la paire de couleurs du niveau courant : fond de l'écran de jeu
-// (var(--bg), visible à travers #boardWrap qui est transparent), couleur
-// commune à toutes les flèches du niveau, et couleur des points de grille
-// recalculée pour rester lisible sur ce fond. Les couleurs sont adoucies
-// selon le réglage de confort visuel choisi ; les flèches restent un peu
-// plus vives que le fond pour rester bien identifiables. En mode noir et
-// blanc, la paire du niveau et le confort sont ignorés : fond noir, flèche
-// blanche, quel que soit le niveau.
+// Choisit noir ou blanc (couleur pleine, pas translucide) pour le texte/
+// icônes du header et des boutons, selon la meilleure lisibilité sur le
+// fond donné.
+function contrastInkColor(bgHex) {
+  const L = relativeLuminance(bgHex);
+  const contrastWithWhite = 1.05 / (L + 0.05);
+  const contrastWithBlack = (L + 0.05) / 0.05;
+  return contrastWithBlack >= contrastWithWhite ? '#111111' : '#ffffff';
+}
+
+// Applique une couleur de fond : fond de l'écran de jeu (var(--bg)), couleur
+// des points de grille adaptée pour rester lisible (var(--dot)), et couleur
+// du header + intérieur/bordure des boutons du header, qui se fondent avec
+// ce même fond (var(--chrome) = var(--bg)) — seule l'icône/le texte
+// (var(--chrome-ink), noir ou blanc) reste visible par-dessus.
+function setBackground(bg) {
+  document.documentElement.style.setProperty('--bg', bg);
+  document.documentElement.style.setProperty('--dot', contrastDotColor(bg));
+  document.documentElement.style.setProperty('--chrome', bg);
+  document.documentElement.style.setProperty('--chrome-ink', contrastInkColor(bg));
+}
+
+// Applique la paire de couleurs du niveau courant. Les couleurs sont
+// adoucies selon le réglage de confort visuel choisi ; les flèches restent
+// un peu plus vives que le fond pour rester bien identifiables. En mode
+// noir et blanc / mode clair, la paire du niveau et le confort sont
+// ignorés : fond et flèche en noir et blanc (ou l'inverse), quel que soit
+// le niveau.
 function applyLevelColors(pair) {
   if (displayMode === 'bw') {
-    document.documentElement.style.setProperty('--bg', '#000000');
-    document.documentElement.style.setProperty('--dot', 'rgba(255,255,255,0.55)');
+    setBackground('#000000');
     arrowColor = '#ffffff';
     return;
   }
   if (displayMode === 'wb') {
-    document.documentElement.style.setProperty('--bg', '#ffffff');
-    document.documentElement.style.setProperty('--dot', 'rgba(0,0,0,0.45)');
+    setBackground('#ffffff');
     arrowColor = '#000000';
     return;
   }
   const amount = COMFORT_AMOUNT[colorComfort] ?? COMFORT_AMOUNT.confort;
   const bg = softenColor(pair.bg, amount);
   const arrow = softenColor(pair.arrow, amount * 0.5);
-  document.documentElement.style.setProperty('--bg', bg);
-  document.documentElement.style.setProperty('--dot', contrastDotColor(bg));
+  setBackground(bg);
   arrowColor = arrow;
 }
 
