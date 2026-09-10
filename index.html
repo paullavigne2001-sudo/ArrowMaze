@@ -7,7 +7,7 @@
 <style>
   :root{
     --bg:#0c1116; --panel:#141b22; --border:#26323c; --text:#eef4f7; --muted:#8fa2ad;
-    --accent:#8b5cf6; --ok:#34d399; --bad:#fb7185;
+    --accent:#8b5cf6; --ok:#34d399; --bad:#fb7185; --dot:#26323c;
   }
   *{box-sizing:border-box}
   html,body{height:100%}
@@ -206,7 +206,126 @@
 <script type="module">
 import { generateLevel, canExit, DIRS } from './engine.js';
 
-const COLORS = ["#a78bfa","#f472b6","#22d3ee","#34d399","#facc15","#60a5fa","#fb7185","#c084fc"];
+// 30 paires de couleurs (fond froid / flèche chaude) fournies par le design.
+// Une seule paire est utilisée par niveau : toutes les flèches du niveau
+// partagent la couleur "chaude", et le fond de l'écran de jeu prend la
+// couleur "froide" (voir applyLevelColors ci-dessous).
+const COLOR_PAIRS = [
+  { bg:'#0FE6E6', arrow:'#F31616' },
+  { bg:'#15ABD1', arrow:'#EE522B' },
+  { bg:'#2598E4', arrow:'#F5680A' },
+  { bg:'#0C60DF', arrow:'#E9A135' },
+  { bg:'#1741E8', arrow:'#F1C822' },
+  { bg:'#1010D5', arrow:'#F6F623' },
+  { bg:'#C4E444', arrow:'#3A0FE6' },
+  { bg:'#99EB1E', arrow:'#7B35E3' },
+  { bg:'#65E60F', arrow:'#A133EB' },
+  { bg:'#57E633', arrow:'#AD0BD5' },
+  { bg:'#17E817', arrow:'#EF2AEF' },
+  { bg:'#3AE45C', arrow:'#DD0EB3' },
+  { bg:'#0CE964', arrow:'#E82C9C' },
+  { bg:'#25E99B', arrow:'#DA0B5E' },
+  { bg:'#2AEFC7', arrow:'#E31C44' },
+  { bg:'#0DF2F2', arrow:'#ED2C2C' },
+  { bg:'#2EC5EA', arrow:'#E4370C' },
+  { bg:'#0F93EB', arrow:'#E67D37' },
+  { bg:'#3E81E5', arrow:'#DF8A0C' },
+  { bg:'#1B45EE', arrow:'#E8BE17' },
+  { bg:'#0A0AEB', arrow:'#E6E633' },
+  { bg:'#5935E9', arrow:'#B7E10E' },
+  { bg:'#6D17EE', arrow:'#9DEA2A' },
+  { bg:'#A23CE7', arrow:'#5EDA0B' },
+  { bg:'#C40DF2', arrow:'#55E830' },
+  { bg:'#0EE10E', arrow:'#EA2EEA' },
+  { bg:'#37E65A', arrow:'#EB0FBF' },
+  { bg:'#0CDF60', arrow:'#E935A1' },
+  { bg:'#17E894', arrow:'#F3166F' },
+  { bg:'#0EE1B7', arrow:'#ED2C52' },
+];
+
+// Tirage "sac mélangé" (comme les pièces dans Tetris) : on distribue les 30
+// paires dans un ordre aléatoire, on les consomme une à une, et quand le sac
+// est vide on remélange un nouveau lot complet des 30 — en s'assurant que sa
+// première couleur n'est jamais identique à la toute dernière utilisée. Ça
+// garantit : jamais deux fois la même paire d'affilée, aucune répétition
+// avant d'avoir vu les 30, et un ordre qui n'a rien de séquentiel/logique.
+let colorBag = [];
+let lastColorIndex = -1;
+const levelColorAssignment = {}; // n° de niveau -> index dans COLOR_PAIRS
+
+function shuffledIndices() {
+  const arr = COLOR_PAIRS.map((_, i) => i);
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function refillColorBag() {
+  const bag = shuffledIndices();
+  if (bag[0] === lastColorIndex && bag.length > 1) {
+    const swapAt = 1 + Math.floor(Math.random() * (bag.length - 1));
+    [bag[0], bag[swapAt]] = [bag[swapAt], bag[0]];
+  }
+  colorBag = bag;
+}
+
+function nextColorIndex() {
+  if (colorBag.length === 0) refillColorBag();
+  const idx = colorBag.pop();
+  lastColorIndex = idx;
+  return idx;
+}
+
+// Attribue (et mémorise) la paire de couleurs d'un niveau donné : un même
+// niveau conserve toujours la même paire tant que la page n'est pas
+// rechargée (utile pour "Recommencer le niveau").
+function getColorPairForLevel(levelNumber) {
+  if (!(levelNumber in levelColorAssignment)) {
+    levelColorAssignment[levelNumber] = nextColorIndex();
+  }
+  return COLOR_PAIRS[levelColorAssignment[levelNumber]];
+}
+
+let arrowColor = COLOR_PAIRS[0].arrow;
+
+// Luminance relative (WCAG) d'une couleur hexadécimale, pour choisir des
+// points de grille noirs ou blancs selon que le fond du niveau est clair ou
+// sombre.
+function relativeLuminance(hex) {
+  const c = hex.replace('#', '');
+  const toLin = (v) => {
+    v /= 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  };
+  const r = toLin(parseInt(c.substring(0, 2), 16));
+  const g = toLin(parseInt(c.substring(2, 4), 16));
+  const b = toLin(parseInt(c.substring(4, 6), 16));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+// Choisit la teinte (noir ou blanc, semi-transparente) qui contraste le
+// mieux avec la couleur de fond donnée, selon le ratio de contraste WCAG.
+function contrastDotColor(bgHex) {
+  const L = relativeLuminance(bgHex);
+  const contrastWithWhite = 1.05 / (L + 0.05);
+  const contrastWithBlack = (L + 0.05) / 0.05;
+  return contrastWithBlack >= contrastWithWhite
+    ? 'rgba(0,0,0,0.45)'
+    : 'rgba(255,255,255,0.55)';
+}
+
+// Applique la paire de couleurs du niveau courant : fond de l'écran de jeu
+// (var(--bg), visible à travers #boardWrap qui est transparent), couleur
+// commune à toutes les flèches du niveau, et couleur des points de grille
+// recalculée pour rester lisible sur ce fond.
+function applyLevelColors(pair) {
+  document.documentElement.style.setProperty('--bg', pair.bg);
+  document.documentElement.style.setProperty('--dot', contrastDotColor(pair.bg));
+  arrowColor = pair.arrow;
+}
+
 const DIR_ANGLE = { up: 0, right: 90, down: 180, left: 270 };
 
 const svg = document.getElementById('board');
@@ -358,6 +477,7 @@ async function newLevel() {
   moves = 0;
   lives = MAX_LIVES;
   hintActive = false;
+  applyLevelColors(getColorPairForLevel(profile.level));
   render();
   updateHud();
   setStatus('Prêt.');
@@ -373,6 +493,7 @@ function restartLevel() {
   moves = 0;
   lives = MAX_LIVES;
   hintActive = false;
+  applyLevelColors(getColorPairForLevel(profile.level));
   render();
   updateHud();
   setStatus('Niveau recommencé.');
@@ -505,7 +626,7 @@ function render() {
   pattern.setAttribute('patternUnits', 'userSpaceOnUse');
   const dot = document.createElementNS(svg.namespaceURI, 'circle');
   dot.setAttribute('cx', '0.5'); dot.setAttribute('cy', '0.5'); dot.setAttribute('r', '0.035');
-  dot.setAttribute('fill', 'var(--border)');
+  dot.setAttribute('fill', 'var(--dot)');
   pattern.appendChild(dot);
   defs.appendChild(pattern);
 
@@ -555,7 +676,7 @@ function buildGuideLine(a) {
   const x2 = dc !== 0 ? (dc > 0 ? cols + padX : -padX) : x1;
   const y2 = dr !== 0 ? (dr > 0 ? rows + padY : -padY) : y1;
 
-  const color = COLORS[a.id % COLORS.length];
+  const color = arrowColor;
   const line = document.createElementNS(svg.namespaceURI, 'line');
   line.setAttribute('class', 'guideLine');
   line.setAttribute('x1', x1); line.setAttribute('y1', y1);
@@ -592,7 +713,7 @@ function buildArrowElement(a) {
   g.classList.add('arrow');
   g.dataset.id = a.id;
 
-  const color = COLORS[a.id % COLORS.length];
+  const color = arrowColor;
   const pts = pathToPoints(a.path);
 
   const outline = document.createElementNS(svg.namespaceURI, 'polyline');
