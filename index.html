@@ -13,15 +13,15 @@
   html,body{height:100%}
   body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif;
        height:100vh;overflow:hidden;display:flex;flex-direction:column;align-items:center}
-  header{width:100%;padding:14px 18px;border-bottom:1px solid var(--border);background:#0f161d;
+  header{width:100%;padding:14px 18px;border-bottom:none;background:var(--bg);
          display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
   header h1{margin:0;font-size:19px}
   header .sub{color:var(--muted);font-size:12px}
   .hud{display:flex;gap:10px;align-items:center;font-size:13px}
-  .badge{background:var(--panel);border:1px solid var(--border);border-radius:999px;padding:6px 12px}
-  button{cursor:pointer;font:inherit;font-weight:700;border-radius:9px;border:1px solid var(--border);
+  .badge{background:var(--panel);border:none;border-radius:999px;padding:6px 12px}
+  button{cursor:pointer;font:inherit;font-weight:700;border-radius:9px;border:none;
          background:var(--panel);color:var(--text);padding:9px 14px}
-  button.primary{background:var(--accent);border-color:var(--accent)}
+  button.primary{background:var(--accent)}
   button:disabled{opacity:.5;cursor:default}
   main{width:min(100vw,720px);flex:1;min-height:0;padding:6px 4px;display:flex;flex-direction:column;
        align-items:center;justify-content:center;gap:10px}
@@ -52,10 +52,10 @@
   #status.bad{color:var(--bad)}
   .toolbar{display:flex;justify-content:center;gap:10px;width:100%}
   .iconBtn{display:flex;align-items:center;justify-content:center;width:44px;height:44px;
-           padding:0;border-radius:12px;background:var(--panel);border:1px solid var(--border);color:var(--muted)}
+           padding:0;border-radius:12px;background:var(--panel);border:none;color:var(--muted)}
   .iconBtn svg{width:22px;height:22px}
-  .iconBtn.active{background:var(--accent);border-color:var(--accent);color:#fff}
-  .iconBtn.light{background:#ffffff;border-color:#ffffff;color:#111}
+  .iconBtn.active{background:var(--accent);color:#fff}
+  .iconBtn.light{background:#ffffff;color:#111}
   .guideLine{pointer-events:none;stroke-dasharray:0.16 0.18;stroke-linecap:round}
   .overlay{position:fixed;inset:0;background:#000c;display:none;align-items:center;justify-content:center;z-index:10}
   .overlay.show{display:flex}
@@ -64,7 +64,7 @@
   .overlay h2{margin:0 0 8px}
   .overlay p{color:var(--muted);margin:0 0 18px}
   .overlay .card .stack{display:flex;flex-direction:column;gap:10px}
-  #livesBadge{letter-spacing:2px}
+  #livesBadge{letter-spacing:2px;white-space:nowrap;display:inline-flex;align-items:center}
   #livesBadge .lost{opacity:.28}
   .links{color:var(--muted);font-size:12px}
   .links a{color:inherit}
@@ -81,6 +81,7 @@
   #movesBadge,
   #undoBtn,
   #newBtn,
+  #bwModeBtn,
   #status{display:none}
   #gameMain .links{display:none}
 
@@ -192,7 +193,7 @@
       </svg>
     </button>
     <span class="badge" id="movesBadge">0 coups</span>
-    <button id="hintBtn" title="Indice (regarder une pub)" aria-label="Demander un indice en regardant une publicité">💡 Indice · AD</button>
+    <button id="hintBtn" title="Indice (regarder une pub)" aria-label="Demander un indice en regardant une publicité">💡 AD</button>
     <button id="undoBtn">Annuler</button>
     <button id="newBtn">Nouveau niveau</button>
   </div>
