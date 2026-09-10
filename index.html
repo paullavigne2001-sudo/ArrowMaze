@@ -8,14 +8,15 @@
   :root{
     --bg:#0c1116; --panel:#141b22; --border:#26323c; --text:#eef4f7; --muted:#8fa2ad;
     --accent:#8b5cf6; --ok:#34d399; --bad:#fb7185; --dot:#26323c;
-    --chrome:#141b22; --chrome-ink:#eef4f7;
+    --chrome:#141b22; --chrome-ink:#eef4f7; --header-h:64px;
   }
   *{box-sizing:border-box}
   html,body{height:100%}
   body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif;
-       height:100vh;overflow:hidden;display:flex;flex-direction:column;align-items:center}
+       height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;align-items:center}
   header{width:100%;padding:14px 18px;border-bottom:1px solid var(--chrome);background:var(--chrome);color:var(--chrome-ink);
-         display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+         display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+         position:fixed;top:0;left:0;right:0;z-index:5}
   header h1{margin:0;font-size:19px}
   header .sub{color:var(--muted);font-size:12px}
   .hud{display:flex;gap:10px;align-items:center;font-size:13px}
@@ -24,7 +25,15 @@
          background:var(--panel);color:var(--text);padding:9px 14px}
   button.primary{background:var(--accent);border-color:var(--accent)}
   button:disabled{opacity:.5;cursor:default}
-  main{width:min(100vw,720px);flex:1;min-height:0;padding:6px 4px;display:flex;flex-direction:column;
+  /* Le header est en position:fixed (voir ci-dessus), donc il ne "pousse"
+     plus le contenu vers le bas dans le flux normal. On réserve nous-même
+     l'espace qu'il occupe réellement via --header-h (mesuré en JS, voir
+     watchHeaderHeight ci-dessous) en padding-top : la grille est ainsi
+     centrée dans l'espace VRAIMENT visible sous le header, et jamais
+     recouverte par celui-ci, quelle que soit sa hauteur réelle (elle peut
+     varier si le HUD passe sur deux lignes sur un petit écran). */
+  main{width:min(100vw,720px);flex:1;min-height:0;box-sizing:border-box;
+       padding:calc(var(--header-h, 64px) + 6px) 4px 6px;display:flex;flex-direction:column;
        align-items:center;justify-content:center;gap:10px}
   /* Point 9 : plus de cadre visible autour de la grille (ni fond, ni bordure,
      ni coins arrondis) — seule la grille de points (voir render()) matérialise
@@ -470,41 +479,6 @@ function applyLevelColors(pair) {
 
 const DIR_ANGLE = { up: 0, right: 90, down: 180, left: 270 };
 
-// --- Niveaux enchaînés à taille de grille variable ---------------------
-// Au lieu de régénérer une grille 40×40 aléatoire à chaque partie, la
-// taille de la grille est désormais déterminée par le numéro de niveau du
-// joueur (profile.level), en suivant une séquence de tailles qui varie
-// pour éviter la routine (cf. tableau du cahier des charges). La séquence
-// boucle une fois épuisée, mais l'agencement des flèches reste tiré au
-// hasard à chaque génération (seed basée sur l'horloge).
-const LEVEL_SIZES = [
-  { rows: 32, cols: 22 },
-  { rows: 46, cols: 32 },
-  { rows: 28, cols: 18 },
-  { rows: 43, cols: 38 },
-  { rows: 32, cols: 32 },
-  { rows: 28, cols: 18 },
-  { rows: 40, cols: 40 },
-  { rows: 36, cols: 26 },
-  { rows: 24, cols: 34 },
-  { rows: 38, cols: 28 },
-];
-
-// Densité de référence : 60 flèches pour une grille 40×40 (1600 cases),
-// soit ~26,67 cases par flèche. Le nombre de flèches d'un niveau est
-// recalculé à partir de cette densité pour que la difficulté reste
-// cohérente quelle que soit la taille de la grille.
-const CELLS_PER_ARROW = (40 * 40) / 60;
-
-function sizeForLevel(levelNumber) {
-  const i = Math.max(0, (levelNumber - 1)) % LEVEL_SIZES.length;
-  return LEVEL_SIZES[i];
-}
-
-function arrowCountForSize(rows, cols) {
-  return Math.max(20, Math.round((rows * cols) / CELLS_PER_ARROW));
-}
-
 const svg = document.getElementById('board');
 const boardWrap = document.getElementById('boardWrap');
 const statusEl = document.getElementById('status');
@@ -527,6 +501,22 @@ const bwModeBtn = document.getElementById('bwModeBtn');
 const homeScreen = document.getElementById('homeScreen');
 const gameHeader = document.getElementById('gameHeader');
 const gameMain = document.getElementById('gameMain');
+
+// Le header est en position:fixed, donc il ne réserve plus sa place dans le
+// flux normal (voir la règle CSS `main`) : on mesure sa hauteur réellement
+// affichée (elle peut varier si le HUD passe sur deux lignes sur un petit
+// écran) et on la republie dans --header-h, pour que la grille soit
+// toujours centrée exactement dans l'espace visible sous le header, jamais
+// recouverte par lui.
+function updateHeaderHeightVar() {
+  const h = gameHeader.classList.contains('hidden') ? 0 : gameHeader.offsetHeight;
+  document.documentElement.style.setProperty('--header-h', `${h}px`);
+}
+new ResizeObserver(updateHeaderHeightVar).observe(gameHeader);
+window.addEventListener('resize', updateHeaderHeightVar);
+window.addEventListener('orientationchange', updateHeaderHeightVar);
+updateHeaderHeightVar();
+
 const playBtn = document.getElementById('playBtn');
 const homeBtn = document.getElementById('homeBtn');
 const avatarBtn = document.getElementById('avatarBtn');
@@ -583,6 +573,7 @@ function showGame() {
   homeScreen.classList.add('hidden');
   gameHeader.classList.remove('hidden');
   gameMain.classList.remove('hidden');
+  updateHeaderHeightVar();
 }
 
 avatarBtn.addEventListener('click', () => {
@@ -671,15 +662,13 @@ function setStatus(msg, bad=false) {
 }
 
 async function newLevel() {
-  const { rows, cols } = sizeForLevel(profile.level);
-  const arrows = arrowCountForSize(rows, cols);
-  setStatus(`Génération du niveau ${profile.level} (${cols}×${rows})…`);
+  setStatus('Génération du niveau…');
   overlay.classList.remove('show');
   gameOverOverlay.classList.remove('show');
   // laisse le message "génération…" s'afficher avant le calcul (bloquant mais bref)
   await new Promise(r => setTimeout(r, 20));
   const seed = Date.now() ^ Math.floor(Math.random() * 1e9);
-  level = generateLevel({ seed, rows, cols, arrows, fast: true });
+  level = generateLevel({ seed, arrows: 60, fast: true });
   remaining = new Set(level.arrows.map(a => a.id));
   history = [];
   moves = 0;
