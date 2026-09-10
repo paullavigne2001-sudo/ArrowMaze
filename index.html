@@ -13,7 +13,7 @@
   html,body{height:100%}
   body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif;
        height:100vh;overflow:hidden;display:flex;flex-direction:column;align-items:center}
-  header{width:100%;padding:14px 18px;border-bottom:none;background:var(--bg);
+  header{position:absolute;top:0;left:0;right:0;z-index:5;padding:14px 18px;border-bottom:none;background:var(--bg);
          display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
   header h1{margin:0;font-size:19px}
   header .sub{color:var(--muted);font-size:12px}
@@ -201,7 +201,7 @@
 
 <main class="hidden" id="gameMain">
   <div id="boardWrap">
-    <svg id="board" viewBox="0 0 40 40"></svg>
+    <svg id="board" viewBox="0 0 40 40" preserveAspectRatio="xMidYMin meet"></svg>
   </div>
   <div id="status">Génération du niveau…</div>
   <div class="links">Envie de fabriquer tes propres niveaux ? <a href="editor.html">Ouvrir l'éditeur</a></div>
