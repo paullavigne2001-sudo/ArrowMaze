@@ -442,21 +442,49 @@ function pathToPoints(path) {
 }
 
 // Marge (en unités de grille) ajoutée tout autour du plateau réel dans le
-// viewBox : elle donne aux flèches qui sortent la place de continuer leur
-// trajectoire au-delà du bord de la grille, visibles jusqu'à l'approche du
-// bord de l'écran, au lieu de disparaître brutalement à la limite de la
-// grille (point 9 de la to-do list).
-function boardPadding(rows, cols) {
-  return Math.max(2, Math.round(Math.max(rows, cols) * 0.10));
+// viewBox : elle donne aux flèches qui sortent (et aux lignes de guidage) la
+// place de continuer leur trajectoire au-delà du bord de la grille, jusqu'au
+// bord réel de l'écran.
+//
+// padX et padY ne sont PAS forcément égaux : #boardWrap remplit tout le
+// rectangle disponible (largeur ET hauteur, plus de carré forcé), qui n'a en
+// général pas le même ratio que la grille (ex. 32×22). On part d'une marge
+// minimale symétrique, puis on l'agrandit sur l'axe qui en a besoin pour que
+// le ratio du viewBox colle exactement à celui du rectangle réel de
+// #boardWrap : il ne reste alors plus aucune bande vide (« letterboxing »)
+// entre le viewBox et le bord de l'écran, donc plus aucun écart entre « bord
+// du viewBox » et « bord de l'écran ». Les cases restent carrées : c'est bien
+// la marge qui varie, jamais l'échelle de la grille elle-même.
+let padX = 2, padY = 2;
+function computePadding(rows, cols) {
+  const minPad = Math.max(2, Math.round(Math.max(rows, cols) * 0.10));
+  let pX = minPad, pY = minPad;
+  const rect = boardWrap.getBoundingClientRect();
+  if (rect.width > 0 && rect.height > 0) {
+    const contentW = cols + minPad * 2;
+    const contentH = rows + minPad * 2;
+    const containerAspect = rect.width / rect.height;
+    const contentAspect = contentW / contentH;
+    if (containerAspect > contentAspect) {
+      // Le rectangle réel est plus large que le contenu : on élargit la
+      // marge horizontale pour absorber tout l'espace en largeur.
+      pX = minPad + (contentH * containerAspect - contentW) / 2;
+    } else if (containerAspect < contentAspect) {
+      // Le rectangle réel est plus haut que le contenu : on élargit la
+      // marge verticale pour absorber tout l'espace en hauteur.
+      pY = minPad + (contentW / containerAspect - contentH) / 2;
+    }
+  }
+  return { padX: pX, padY: pY };
 }
 
 function render() {
   resetZoom();
   const { rows, cols } = level.grid;
-  const pad = boardPadding(rows, cols);
-  // Le viewBox dépasse la grille réelle de `pad` de chaque côté ; la grille
-  // elle-même reste positionnée en (0,0)-(cols,rows) à l'intérieur.
-  svg.setAttribute('viewBox', `${-pad} ${-pad} ${cols + pad * 2} ${rows + pad * 2}`);
+  ({ padX, padY } = computePadding(rows, cols));
+  // Le viewBox dépasse la grille réelle de padX/padY de chaque côté ; la
+  // grille elle-même reste positionnée en (0,0)-(cols,rows) à l'intérieur.
+  svg.setAttribute('viewBox', `${-padX} ${-padY} ${cols + padX * 2} ${rows + padY * 2}`);
   svg.innerHTML = '';
 
   // Plus de cadre / fond plein pour délimiter la grille : ses limites sont
@@ -518,15 +546,14 @@ function renderGuides() {
 
 function buildGuideLine(a) {
   const { rows, cols } = level.grid;
-  const pad = boardPadding(rows, cols);
   const [hr, hc] = a.path[a.headIndex];
   const [dr, dc] = DIRS[a.direction];
   const x1 = hc + 0.5, y1 = hr + 0.5;
-  // La ligne se prolonge au-delà de la grille, jusqu'au bord de la zone
-  // visible (même marge `pad` que celle utilisée pour les flèches qui
-  // sortent), au lieu de s'arrêter net sur le bord de la grille.
-  const x2 = dc !== 0 ? (dc > 0 ? cols + pad : -pad) : x1;
-  const y2 = dr !== 0 ? (dr > 0 ? rows + pad : -pad) : y1;
+  // La ligne se prolonge au-delà de la grille, jusqu'au bord réel du
+  // rectangle de jeu (padX/padY, calculés dans render() pour que le viewBox
+  // colle exactement au bord de l'écran, sans letterboxing).
+  const x2 = dc !== 0 ? (dc > 0 ? cols + padX : -padX) : x1;
+  const y2 = dr !== 0 ? (dr > 0 ? rows + padY : -padY) : y1;
 
   const color = COLORS[a.id % COLORS.length];
   const line = document.createElementNS(svg.namespaceURI, 'line');
