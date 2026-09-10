@@ -661,6 +661,36 @@ function setStatus(msg, bad=false) {
   statusEl.classList.toggle('bad', bad);
 }
 
+// Point 5 (to-do) : les niveaux ne sont pas une grille fixe 40×40 à chaque
+// partie — la taille suit une séquence liée au numéro de niveau du joueur
+// (profile.level), pour alterner les difficultés et éviter la routine ;
+// la séquence boucle ensuite (niveau 11 = même taille que le niveau 1, etc).
+const LEVEL_SIZES = [
+  { rows: 32, cols: 22 },
+  { rows: 46, cols: 32 },
+  { rows: 28, cols: 18 },
+  { rows: 43, cols: 38 },
+  { rows: 32, cols: 32 },
+  { rows: 28, cols: 18 },
+  { rows: 40, cols: 40 },
+  { rows: 36, cols: 26 },
+  { rows: 24, cols: 34 },
+  { rows: 38, cols: 28 },
+];
+
+function gridForLevel(levelNumber) {
+  const idx = (Math.max(1, levelNumber) - 1) % LEVEL_SIZES.length;
+  return LEVEL_SIZES[idx];
+}
+
+// Nombre de flèches proportionnel à la taille de la grille, pour garder une
+// densité (donc une difficulté) cohérente malgré les tailles très
+// différentes. Calibré sur la référence historique 40×40 / 60 flèches.
+function arrowsForGrid(rows, cols) {
+  const REF_DENSITY = 60 / (40 * 40);
+  return Math.max(20, Math.round(rows * cols * REF_DENSITY));
+}
+
 async function newLevel() {
   setStatus('Génération du niveau…');
   overlay.classList.remove('show');
@@ -668,7 +698,8 @@ async function newLevel() {
   // laisse le message "génération…" s'afficher avant le calcul (bloquant mais bref)
   await new Promise(r => setTimeout(r, 20));
   const seed = Date.now() ^ Math.floor(Math.random() * 1e9);
-  level = generateLevel({ seed, arrows: 60, fast: true });
+  const { rows, cols } = gridForLevel(profile.level);
+  level = generateLevel({ seed, rows, cols, arrows: arrowsForGrid(rows, cols), fast: true });
   remaining = new Set(level.arrows.map(a => a.id));
   history = [];
   moves = 0;
