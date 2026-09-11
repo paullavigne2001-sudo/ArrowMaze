@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "app.vercel.arrow_maze_psi.twa",
+        "sha256_cert_fingerprints": ["7E:54:1F:33:DD:54:FA:9B:94:C6:22:D7:FF:01:BF:7C:58:EC:DA:11:31:9A:0C:82:FA:F7:D3:83:C1:6D:D6:CA"]
+      }
+    }]
