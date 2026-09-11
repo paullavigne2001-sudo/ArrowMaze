@@ -69,13 +69,33 @@
   .iconBtn.active{background:var(--accent);border-color:var(--accent);color:#fff}
   .iconBtn.light{background:#ffffff;border-color:#ffffff;color:#111}
   .guideLine{pointer-events:none;stroke-dasharray:0.16 0.18;stroke-linecap:round}
-  .overlay{position:fixed;inset:0;background:#000c;display:none;align-items:center;justify-content:center;z-index:10}
+  .overlay{position:fixed;inset:0;background:#000c;display:none;align-items:center;justify-content:center;
+           z-index:10;overflow:hidden}
   .overlay.show{display:flex}
-  .overlay .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:26px 30px;
-                 text-align:center;max-width:320px}
+  .overlay .card{position:relative;z-index:1;background:var(--panel);border:1px solid var(--border);
+                 border-radius:16px;padding:26px 30px;text-align:center;max-width:320px}
   .overlay h2{margin:0 0 8px}
   .overlay p{color:var(--muted);margin:0 0 18px}
   .overlay .card .stack{display:flex;flex-direction:column;gap:10px}
+  /* Écran de victoire : rayonnement dynamique centré derrière l'étiquette,
+     qui se propage sur tout l'écran à l'apparition puis pulse doucement. */
+  .victory-glow{position:absolute;left:50%;top:42%;width:150vmax;height:150vmax;
+                transform:translate(-50%,-50%) scale(0);opacity:0;pointer-events:none;
+                background:radial-gradient(circle,rgba(196,181,253,.9) 0%,rgba(139,92,246,.5) 20%,
+                           rgba(139,92,246,.16) 42%,rgba(139,92,246,0) 68%)}
+  .overlay.show .victory-glow{
+    animation:victoryGlowIn .9s cubic-bezier(.2,.8,.3,1) forwards,
+              victoryGlowPulse 2.6s ease-in-out 1s infinite;
+  }
+  @keyframes victoryGlowIn{
+    0%{transform:translate(-50%,-50%) scale(0);opacity:0}
+    55%{opacity:1}
+    100%{transform:translate(-50%,-50%) scale(1);opacity:1}
+  }
+  @keyframes victoryGlowPulse{
+    0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.85}
+    50%{transform:translate(-50%,-50%) scale(1.07);opacity:1}
+  }
   #livesBadge{letter-spacing:2px}
   #livesBadge .lost{opacity:.28}
   .links{color:var(--muted);font-size:12px}
@@ -137,6 +157,7 @@
   .player-name input{width:100%;background:transparent;border:none;color:var(--text);font:inherit;
                       font-weight:700;font-size:16px;padding:2px 0}
   .player-name input:focus{outline:none;border-bottom:1px solid var(--accent)}
+  .player-name-static{font-weight:700;font-size:16px;color:var(--text);padding:2px 0}
   .player-title{font-size:12px;color:var(--accent);font-weight:600;margin-top:2px}
   #randomNameBtn{width:40px;min-width:40px;height:40px;padding:0;font-size:17px;border-radius:11px}
   .progress-block{width:100%;text-align:left}
@@ -240,14 +261,11 @@
     <p class="home-sub">Libère toutes les flèches, une par une.</p>
 
     <div class="player">
-      <button id="avatarBtn" class="avatar" type="button" title="Changer d'avatar" aria-label="Changer d'avatar">🙂</button>
+      <div class="avatar" id="homeAvatar" aria-hidden="true">🙂</div>
       <div class="player-info">
-        <div class="player-name">
-          <input id="playerNameInput" type="text" maxlength="18" aria-label="Nom du joueur">
-        </div>
+        <div class="player-name-static" id="homePlayerName">Joueur</div>
         <div class="player-title" id="homePlayerTitle">Débutant</div>
       </div>
-      <button id="randomNameBtn" type="button" title="Nom aléatoire" aria-label="Proposer un nom aléatoire">🎲</button>
     </div>
 
     <div class="progress-block">
@@ -266,6 +284,15 @@
   <div class="card">
     <h2>Paramètres</h2>
     <div class="stack">
+      <div class="player">
+        <button id="avatarBtn" class="avatar" type="button" title="Changer d'avatar" aria-label="Changer d'avatar">🙂</button>
+        <div class="player-info">
+          <div class="player-name">
+            <input id="playerNameInput" type="text" maxlength="18" aria-label="Nom du joueur">
+          </div>
+        </div>
+        <button id="randomNameBtn" type="button" title="Nom aléatoire" aria-label="Proposer un nom aléatoire">🎲</button>
+      </div>
       <label class="toggleRow"><span>🔊 Son</span><input type="checkbox" id="soundToggle"></label>
       <label class="toggleRow"><span>📳 Vibration</span><input type="checkbox" id="vibrationToggle"></label>
       <div class="toggleRow comfortRow">
@@ -331,6 +358,7 @@
 </main>
 
 <div id="overlay" class="overlay">
+  <div class="victory-glow" aria-hidden="true"></div>
   <div class="card">
     <h2>🎉 Niveau terminé !</h2>
     <p id="overlayText"></p>
@@ -627,6 +655,8 @@ const homeBtn = document.getElementById('homeBtn');
 const avatarBtn = document.getElementById('avatarBtn');
 const playerNameInput = document.getElementById('playerNameInput');
 const randomNameBtn = document.getElementById('randomNameBtn');
+const homeAvatar = document.getElementById('homeAvatar');
+const homePlayerName = document.getElementById('homePlayerName');
 const homeProgressLabel = document.getElementById('homeProgressLabel');
 const homeProgressFrac = document.getElementById('homeProgressFrac');
 const homeProgressFill = document.getElementById('homeProgressFill');
@@ -683,8 +713,8 @@ function titleForWorld(world) {
 const profile = loadPlayerProfile();
 
 function refreshHomeScreen() {
-  playerNameInput.value = profile.name;
-  avatarBtn.textContent = profile.avatar;
+  homeAvatar.textContent = profile.avatar;
+  homePlayerName.textContent = profile.name;
   const perWorld = 10;
   const posInWorld = ((profile.level - 1) % perWorld) + 1;
   const world = Math.ceil(profile.level / perWorld);
@@ -713,6 +743,7 @@ avatarBtn.addEventListener('click', () => {
   profile.avatar = AVATARS[(i + 1) % AVATARS.length];
   localStorage.setItem('am_avatar', profile.avatar);
   avatarBtn.textContent = profile.avatar;
+  refreshHomeScreen();
 });
 
 playerNameInput.addEventListener('change', () => {
@@ -720,12 +751,14 @@ playerNameInput.addEventListener('change', () => {
   profile.name = v || randomName();
   playerNameInput.value = profile.name;
   localStorage.setItem('am_playerName', profile.name);
+  refreshHomeScreen();
 });
 
 randomNameBtn.addEventListener('click', () => {
   profile.name = randomName();
   playerNameInput.value = profile.name;
   localStorage.setItem('am_playerName', profile.name);
+  refreshHomeScreen();
 });
 
 playBtn.addEventListener('click', () => {
@@ -738,6 +771,8 @@ homeBtn.addEventListener('click', showHome);
 settingsBtn.addEventListener('click', () => {
   soundToggle.checked = localStorage.getItem('am_sound') !== 'off';
   vibrationToggle.checked = localStorage.getItem('am_vibration') !== 'off';
+  playerNameInput.value = profile.name;
+  avatarBtn.textContent = profile.avatar;
   refreshComfortButtons();
   settingsOverlay.classList.add('show');
 });
