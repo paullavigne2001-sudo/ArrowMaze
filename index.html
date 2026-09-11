@@ -77,24 +77,29 @@
   .overlay h2{margin:0 0 8px}
   .overlay p{color:var(--muted);margin:0 0 18px}
   .overlay .card .stack{display:flex;flex-direction:column;gap:10px}
-  /* Écran de victoire : rayonnement dynamique centré derrière l'étiquette,
-     qui se propage sur tout l'écran à l'apparition puis pulse doucement. */
-  .victory-glow{position:absolute;left:50%;top:42%;width:150vmax;height:150vmax;
-                transform:translate(-50%,-50%) scale(0);opacity:0;pointer-events:none;
-                background:radial-gradient(circle,rgba(196,181,253,.9) 0%,rgba(139,92,246,.5) 20%,
-                           rgba(139,92,246,.16) 42%,rgba(139,92,246,0) 68%)}
-  .overlay.show .victory-glow{
-    animation:victoryGlowIn .9s cubic-bezier(.2,.8,.3,1) forwards,
-              victoryGlowPulse 2.6s ease-in-out 1s infinite;
-  }
+  /* Écran de victoire : rayons lumineux qui tournent autour d'un point fixe
+     centré derrière l'étiquette, rayonnant sur tout l'écran. Le point (le
+     "core") reste immobile ; seuls les rayons tournent autour de lui. */
+  .victory-glow{position:absolute;left:50%;top:42%;width:220vmax;height:220vmax;
+                transform:translate(-50%,-50%) scale(0);opacity:0;pointer-events:none}
+  .overlay.show .victory-glow{animation:victoryGlowIn .7s cubic-bezier(.2,.8,.3,1) forwards}
+  .victory-core{position:absolute;inset:0;
+                background:radial-gradient(circle,rgba(196,181,253,.65) 0%,rgba(139,92,246,.28) 10%,
+                           rgba(139,92,246,0) 26%)}
+  .victory-rays{position:absolute;inset:0;
+                background:repeating-conic-gradient(from 0deg,
+                  rgba(196,181,253,.42) 0deg 3deg,transparent 3deg 30deg);
+                -webkit-mask-image:radial-gradient(circle,transparent 0%,#000 6%,#000 30%,transparent 46%);
+                mask-image:radial-gradient(circle,transparent 0%,#000 6%,#000 30%,transparent 46%);
+                animation:victoryRaysSpin 16s linear infinite}
   @keyframes victoryGlowIn{
     0%{transform:translate(-50%,-50%) scale(0);opacity:0}
     55%{opacity:1}
     100%{transform:translate(-50%,-50%) scale(1);opacity:1}
   }
-  @keyframes victoryGlowPulse{
-    0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.85}
-    50%{transform:translate(-50%,-50%) scale(1.07);opacity:1}
+  @keyframes victoryRaysSpin{
+    from{transform:rotate(0deg)}
+    to{transform:rotate(360deg)}
   }
   #livesBadge{letter-spacing:2px}
   #livesBadge .lost{opacity:.28}
@@ -358,7 +363,10 @@
 </main>
 
 <div id="overlay" class="overlay">
-  <div class="victory-glow" aria-hidden="true"></div>
+  <div class="victory-glow" aria-hidden="true">
+    <div class="victory-core"></div>
+    <div class="victory-rays"></div>
+  </div>
   <div class="card">
     <h2>🎉 Niveau terminé !</h2>
     <p id="overlayText"></p>
