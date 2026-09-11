@@ -529,8 +529,18 @@ const comfortButtons = [...comfortSegmented.querySelectorAll('button')];
 const comfortHint = document.getElementById('comfortHint');
 
 const AVATARS = ['🙂','🦊','🐼','🐸','🐙','🦁','🐨','🤖','👾','🥷'];
-const NAME_ADJ = ['Rapide','Malin','Brave','Vif','Zen','Rusé','Agile','Curieux'];
-const NAME_NOUN = ['Renard','Faucon','Panda','Lynx','Corbeau','Loup','Tigre','Colibri'];
+const NAME_ADJ = [
+  'Rapide','Malin','Brave','Vif','Zen','Rusé','Agile','Curieux',
+  'Astucieux','Vaillant','Discret','Tenace','Audacieux','Habile','Espiègle','Serein',
+  'Intrépide','Futé','Silencieux','Fougueux','Patient','Fier','Loyal','Farouche',
+  'Placide','Subtil','Téméraire','Alerte','Joyeux','Stoïque',
+];
+const NAME_NOUN = [
+  'Renard','Faucon','Panda','Lynx','Corbeau','Loup','Tigre','Colibri',
+  'Aigle','Ours','Dauphin','Requin','Cerf','Sanglier','Blaireau','Hérisson',
+  'Castor','Puma','Léopard','Guépard','Jaguar','Scorpion','Cobra','Vautour',
+  'Hibou','Moineau','Écureuil','Papillon','Bison','Élan',
+];
 
 function loadPlayerProfile() {
   return {
