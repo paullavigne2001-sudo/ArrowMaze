@@ -115,15 +115,13 @@
              gap:8px;margin-bottom:2px}
   .hero-cell{width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,.04);
              border:1px solid rgba(255,255,255,.07)}
-  .hero-arrow{position:relative;width:40px;height:40px;z-index:1}
-  .hero-arrow::after{content:'';position:absolute;left:50%;top:50%;width:46px;height:64px;
-                      transform:translate(-50%,-50%) rotate(var(--rot,0deg));background:var(--tint);
-                      clip-path:polygon(50% 0%,100% 38%,66% 38%,66% 100%,34% 100%,34% 38%,0% 38%);
-                      filter:drop-shadow(0 0 12px var(--tint))}
-  .hero-arrow.up{--rot:0deg;--tint:#a78bfa}
-  .hero-arrow.left{--rot:270deg;--tint:#22d3ee}
-  .hero-arrow.right{--rot:90deg;--tint:#f5a623}
-  .hero-arrow.down{--rot:180deg;--tint:#fb5b7d}
+  .hero-arrow-slot{position:relative;width:40px;height:40px;z-index:1}
+  .hero-arrow-svg{position:absolute;left:50%;top:50%;width:56px;height:56px;
+                   transform:translate(-50%,-50%)}
+  .hero-arrow-slot:nth-of-type(2) .hero-arrow-svg{filter:drop-shadow(0 3px 4px rgba(0,0,0,.5)) drop-shadow(0 0 12px #8b5cf6aa)}
+  .hero-arrow-slot:nth-of-type(4) .hero-arrow-svg{filter:drop-shadow(0 3px 4px rgba(0,0,0,.5)) drop-shadow(0 0 12px #22d3eeaa)}
+  .hero-arrow-slot:nth-of-type(6) .hero-arrow-svg{filter:drop-shadow(0 3px 4px rgba(0,0,0,.5)) drop-shadow(0 0 12px #f5a623aa)}
+  .hero-arrow-slot:nth-of-type(8) .hero-arrow-svg{filter:drop-shadow(0 3px 4px rgba(0,0,0,.5)) drop-shadow(0 0 12px #fb5b7daa)}
 
   .home-title{margin:0;font-size:34px;font-weight:800;letter-spacing:-.02em}
   .home-title .w1{color:var(--text)}
@@ -181,9 +179,61 @@
 
   <div class="home-card">
     <div class="hero-mark" aria-hidden="true">
-      <span class="hero-cell"></span><span class="hero-arrow up"></span><span class="hero-cell"></span>
-      <span class="hero-arrow left"></span><span class="hero-cell"></span><span class="hero-arrow right"></span>
-      <span class="hero-cell"></span><span class="hero-arrow down"></span><span class="hero-cell"></span>
+      <span class="hero-cell"></span>
+      <span class="hero-arrow-slot">
+        <svg class="hero-arrow-svg" viewBox="0 0 68 68">
+          <defs>
+            <linearGradient id="heroGradUp" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#c4b5fd"/><stop offset="1" stop-color="#7c3aed"/>
+            </linearGradient>
+          </defs>
+          <polygon points="36,4 68,28.3 46.2,28.3 46.2,68 25.8,68 25.8,28.3 4,28.3" fill="#4c1d95"/>
+          <polygon points="32,0 64,24.3 42.2,24.3 42.2,64 21.8,64 21.8,24.3 0,24.3"
+                   fill="url(#heroGradUp)" stroke="url(#heroGradUp)" stroke-width="5" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="hero-cell"></span>
+
+      <span class="hero-arrow-slot">
+        <svg class="hero-arrow-svg" viewBox="0 0 68 68">
+          <defs>
+            <linearGradient id="heroGradLeft" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#a5f3fc"/><stop offset="1" stop-color="#06b6d4"/>
+            </linearGradient>
+          </defs>
+          <polygon points="4,36 28.3,4 28.3,25.8 68,25.8 68,46.2 28.3,46.2 28.3,68" fill="#155e75"/>
+          <polygon points="0,32 24.3,0 24.3,21.8 64,21.8 64,42.2 24.3,42.2 24.3,64"
+                   fill="url(#heroGradLeft)" stroke="url(#heroGradLeft)" stroke-width="5" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="hero-cell"></span>
+      <span class="hero-arrow-slot">
+        <svg class="hero-arrow-svg" viewBox="0 0 68 68">
+          <defs>
+            <linearGradient id="heroGradRight" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#fde68a"/><stop offset="1" stop-color="#f59e0b"/>
+            </linearGradient>
+          </defs>
+          <polygon points="68,36 43.7,68 43.7,46.2 4,46.2 4,25.8 43.7,25.8 43.7,4" fill="#92400e"/>
+          <polygon points="64,32 39.7,64 39.7,42.2 0,42.2 0,21.8 39.7,21.8 39.7,0"
+                   fill="url(#heroGradRight)" stroke="url(#heroGradRight)" stroke-width="5" stroke-linejoin="round"/>
+        </svg>
+      </span>
+
+      <span class="hero-cell"></span>
+      <span class="hero-arrow-slot">
+        <svg class="hero-arrow-svg" viewBox="0 0 68 68">
+          <defs>
+            <linearGradient id="heroGradDown" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#fda4af"/><stop offset="1" stop-color="#f43f5e"/>
+            </linearGradient>
+          </defs>
+          <polygon points="36,68 4,43.7 25.8,43.7 25.8,4 46.2,4 46.2,43.7 68,43.7" fill="#9f1239"/>
+          <polygon points="32,64 0,39.7 21.8,39.7 21.8,0 42.2,0 42.2,39.7 64,39.7"
+                   fill="url(#heroGradDown)" stroke="url(#heroGradDown)" stroke-width="5" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="hero-cell"></span>
     </div>
 
     <h1 class="home-title"><span class="w1">Arrow</span><span class="w2">Maze</span></h1>
