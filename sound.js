@@ -102,36 +102,36 @@ const Sound = (() => {
     source.stop(now + duration + 0.01);
   }
 
-  // 🏹 Flèche correctement libérée : petit whoosh descendant
+  // 🏹 Flèche correctement libérée : Variante 1
   function arrowReleased() {
-    noise({
-      duration: 0.13,
-      volume: 0.045,
-      filterFrequency: 1800
-    });
-
     tone({
-      frequency: 520,
+      frequency: 450,
       endFrequency: 180,
-      duration: 0.16,
+      duration: 0.18,
       volume: 0.035,
       type: 'triangle'
     });
+
+    noise({
+      duration: 0.18,
+      volume: 0.045,
+      filterFrequency: 1800
+    });
   }
 
-  // ❌ Flèche bloquée : petit toc / bump
+  // ❌ Flèche bloquée : Variante 76
   function arrowBlocked() {
     tone({
-      frequency: 145,
-      endFrequency: 75,
-      duration: 0.075,
+      frequency: 800,
+      endFrequency: 80,
+      duration: 0.11,
       volume: 0.09,
       type: 'sine'
     });
 
     noise({
-      duration: 0.045,
-      volume: 0.025,
+      duration: 0.11,
+      volume: 0.12,
       filterFrequency: 700,
       delay: 0.01
     });
