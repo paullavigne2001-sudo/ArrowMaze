@@ -3,6 +3,6 @@
       "target": {
         "namespace": "android_app",
         "package_name": "app.vercel.arrow_maze_psi.twa",
-        "sha256_cert_fingerprints": ["7E:54:1F:33:DD:54:FA:9B:94:C6:22:D7:FF:01:BF:7C:58:EC:DA:11:31:9A:0C:82:FA:F7:D3:83:C1:6D:D6:CA"]
+        "sha256_cert_fingerprints": ["B6:E2:6F:D2:B6:80:37:B1:48:FF:D9:47:0E:58:B1:0C:C6:68:F8:40:C3:E4:7E:6E:3D:31:6C:4F:70:9B:2A:E7"]
       }
     }]
