@@ -393,6 +393,7 @@
   </div>
 </div>
 
+<script src="./sound.js"></script>
 <script type="module">
 import { generateLevel, canExit, DIRS, rayCells } from './engine.js';
 
@@ -778,8 +779,12 @@ randomNameBtn.addEventListener('click', () => {
 });
 
 playBtn.addEventListener('click', () => {
+  Sound.init();
   showGame();
-  if (!level) newLevel();
+  if (!level) {
+    Sound.levelStart();
+    newLevel();
+  }
 });
 
 homeBtn.addEventListener('click', showHome);
@@ -927,6 +932,7 @@ function watchAdForHint() {
 function applyHint() {
   clearHint();
   hintActive = true;
+  Sound.hint();
   for (const id of remaining) {
     if (canExit(level, id, remaining)) {
       const el = svg.querySelector(`.arrow[data-id="${id}"]`);
@@ -1314,9 +1320,11 @@ function attemptExit(id, groupEl) {
     removeGuideLine(id);
     const justWon = remaining.size === 0;
     vibrate(15);
+    Sound.arrowReleased();
     animateExit(arrow, groupEl, () => {
       if (justWon) {
         recordLevelCompleted();
+        Sound.victory();
         overlayText.textContent = `Toutes les flèches sont sorties en ${moves} coups.`;
         overlay.classList.add('show');
       }
@@ -1327,10 +1335,12 @@ function attemptExit(id, groupEl) {
     const arrow = level.arrows.find(x => x.id === id);
     const maxSteps = blockedTravelSteps(arrow);
     vibrate([0, 40, 30, 40]);
+    Sound.arrowBlocked();
     lives = Math.max(0, lives - 1);
     updateHud();
     animateBounce(arrow, groupEl, maxSteps);
     if (lives <= 0) {
+      Sound.gameOver();
       setStatus('Vies épuisées.', true);
       gameOverOverlay.classList.add('show');
     } else {
@@ -1360,10 +1370,23 @@ function updateHud() {
   ).join('');
 }
 
-newBtn.addEventListener('click', newLevel);
-nextBtn.addEventListener('click', newLevel);
+newBtn.addEventListener('click', () => {
+  Sound.init();
+  Sound.levelStart();
+  newLevel();
+});
+
+nextBtn.addEventListener('click', () => {
+  Sound.init();
+  Sound.levelNext();
+  newLevel();
+});
 undoBtn.addEventListener('click', undo);
-restartLevelBtn.addEventListener('click', restartLevel);
+restartLevelBtn.addEventListener('click', () => {
+  Sound.init();
+  Sound.levelStart();
+  restartLevel();
+});
 watchAdBtn.addEventListener('click', watchAdForLives);
 hintBtn.addEventListener('click', watchAdForHint);
 guidesBtn.addEventListener('click', () => {
