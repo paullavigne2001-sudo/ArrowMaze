@@ -395,7 +395,7 @@
 
 <script src="./sound.js"></script>
 <script type="module">
-import { generateLevel, canExit, DIRS, rayCells } from './engine.js';
+import { generateLevel, canExit, DIRS, rayCells, parseShapeMask } from './engine.js';
 
 // 30 paires de couleurs (fond froid / flèche chaude) fournies par le design.
 // Une seule paire est utilisée par niveau : toutes les flèches du niveau
@@ -878,6 +878,141 @@ function arrowsForGrid(rows, cols) {
   const REF_DENSITY = 60 / (40 * 40);
   return Math.max(20, Math.round(rows * cols * REF_DENSITY));
 }
+function arrowsForMask(mask) {
+  const REF_DENSITY = 60 / (40 * 40);
+  return Math.max(20, Math.round(mask.reduce((a, v) => a + v, 0) * REF_DENSITY));
+}
+
+// --- Niveaux bonus en forme spéciale ----------------------------------
+// Un niveau sur 5 est un niveau "bonus" : au lieu d'une grille rectangulaire
+// classique, la figure jouable dessine une forme (voir parseShapeMask dans
+// engine.js — format "#nom" suivi de lignes de 0/1, une ligne = une rangée,
+// généré avec l'éditeur de formes). Aucune indication visuelle spéciale :
+// la forme parle d'elle-même.
+const BONUS_SHAPE_TEXTS = [
+  `#flèche
+00000000000000000000000000000000
+00000000000000010000000000000000
+00000000000000111000000000000000
+00000000000001111100000000000000
+00000000000011111110000000000000
+00000000000111111111000000000000
+00000000001111111111100000000000
+00000000011111111111110000000000
+00000000111111111111111000000000
+00000001111111111111111100000000
+00000011111111111111111110000000
+00000000000001111100000000000000
+00000000000001111100000000000000
+00000000000001111100000000000000
+00000000000001111100000000000000
+00000000000001111100000000000000
+00000000000001111100000000000000
+00000000000001111100000000000000
+00000000000001111100000000000000
+00000000000001111100000000000000
+00000000000001111100000000000000
+000000000000000000000000000000`,
+  `#cercle
+0000000000000000000000
+0000000000000000000000
+0000000000000000000000
+0000000000000000000000
+0000000000000000000000
+0000000011001100000000
+0000011111001111100000
+0000111111001111110000
+0001111111001111111000
+0000000000000000000000
+0111111111001111111110
+0111111111001111111110
+0111111111001111111110
+1111111111001111111111
+1111111111001111111111
+0000000000000000000000
+0000000000000000000000
+1111111111001111111111
+1111111111001111111111
+0111111111001111111110
+0111111111001111111110
+0111111111001111111110
+0000000000000000000000
+0001111111001111111000
+0000111111001111110000
+0000011111001111100000
+0000000011001100000000
+0000000000000000000000
+0000000000000000000000
+0000000000000000000000
+0000000000000000000000
+0000000000000000000000`,
+  `#anneau
+0000000000000000000000000000000000
+0000000000000000000000000000000000
+0000000000000111111110000000000000
+0000000000011111111111100000000000
+0000000000111111111111110000000000
+0000000001111100000011111000000000
+0000000011111000000001111100000000
+0000000011110000000000111100000000
+0000000111100000000000011110000000
+0000000111000000000000001110000000
+0000000111000000000000001110000000
+0000000111000000000000001110000000
+0000000111000000000000001110000000
+0000000111000000000000001110000000
+0000000111000000000000001110000000
+0000000111100000000000011110000000
+0000000011110000000000111100000000
+0000000011111000000001111100000000
+0000000001111100000011111000000000
+0000000000111111111111110000000000
+0000000000011111111111100000000000
+0000000000000111111110000000000000
+0000000000000000000000000000000000
+0000000000000000000000000000000000`,
+];
+const BONUS_SHAPES = BONUS_SHAPE_TEXTS.map(parseShapeMask);
+
+function isBonusLevel(levelNumber) {
+  return levelNumber % 5 === 0;
+}
+
+// Même tirage "sac mélangé" que pour les couleurs de niveau (voir plus
+// haut) : jamais la même forme deux fois de suite, tout le lot défile
+// avant qu'une forme ne revienne.
+let bonusShapeBag = [];
+let lastBonusShapeIndex = -1;
+const bonusShapeAssignment = {}; // n° de niveau -> index dans BONUS_SHAPES
+
+function shuffledShapeIndices() {
+  const arr = BONUS_SHAPES.map((_, i) => i);
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+function refillBonusShapeBag() {
+  const bag = shuffledShapeIndices();
+  if (bag[0] === lastBonusShapeIndex && bag.length > 1) {
+    const swapAt = 1 + Math.floor(Math.random() * (bag.length - 1));
+    [bag[0], bag[swapAt]] = [bag[swapAt], bag[0]];
+  }
+  bonusShapeBag = bag;
+}
+function nextBonusShapeIndex() {
+  if (bonusShapeBag.length === 0) refillBonusShapeBag();
+  const idx = bonusShapeBag.pop();
+  lastBonusShapeIndex = idx;
+  return idx;
+}
+function getBonusShapeForLevel(levelNumber) {
+  if (!(levelNumber in bonusShapeAssignment)) {
+    bonusShapeAssignment[levelNumber] = nextBonusShapeIndex();
+  }
+  return BONUS_SHAPES[bonusShapeAssignment[levelNumber]];
+}
 
 async function newLevel() {
   setStatus('Génération du niveau…');
@@ -886,8 +1021,18 @@ async function newLevel() {
   // laisse le message "génération…" s'afficher avant le calcul (bloquant mais bref)
   await new Promise(r => setTimeout(r, 20));
   const seed = Date.now() ^ Math.floor(Math.random() * 1e9);
-  const { rows, cols } = gridForLevel(profile.level);
-  level = generateLevel({ seed, rows, cols, arrows: arrowsForGrid(rows, cols), fast: true });
+  let rows, cols, mask, arrowsCount;
+  if (isBonusLevel(profile.level)) {
+    const shape = getBonusShapeForLevel(profile.level);
+    ({ rows, cols } = shape);
+    mask = shape.mask;
+    arrowsCount = arrowsForMask(mask);
+  } else {
+    ({ rows, cols } = gridForLevel(profile.level));
+    mask = null;
+    arrowsCount = arrowsForGrid(rows, cols);
+  }
+  level = generateLevel({ seed, rows, cols, mask, arrows: arrowsCount, fast: true });
   remaining = new Set(level.arrows.map(a => a.id));
   history = [];
   moves = 0;
@@ -1047,11 +1192,29 @@ function render() {
   pattern.appendChild(dot);
   defs.appendChild(pattern);
 
-  const bg = document.createElementNS(svg.namespaceURI, 'rect');
-  bg.setAttribute('x', 0); bg.setAttribute('y', 0);
-  bg.setAttribute('width', cols); bg.setAttribute('height', rows);
-  bg.setAttribute('fill', 'url(#gridDots)');
-  svg.appendChild(bg);
+  const mask = level.grid.mask;
+  if (mask) {
+    // Niveau bonus en forme spéciale : un point par case ACTIVE seulement,
+    // pour que les points de grille dessinent le contour de la forme au
+    // lieu de remplir tout le rectangle englobant.
+    const g = document.createElementNS(svg.namespaceURI, 'g');
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (mask[r * cols + c] !== 1) continue;
+        const d = document.createElementNS(svg.namespaceURI, 'circle');
+        d.setAttribute('cx', c + 0.5); d.setAttribute('cy', r + 0.5); d.setAttribute('r', '0.035');
+        d.setAttribute('fill', 'var(--dot)');
+        g.appendChild(d);
+      }
+    }
+    svg.appendChild(g);
+  } else {
+    const bg = document.createElementNS(svg.namespaceURI, 'rect');
+    bg.setAttribute('x', 0); bg.setAttribute('y', 0);
+    bg.setAttribute('width', cols); bg.setAttribute('height', rows);
+    bg.setAttribute('fill', 'url(#gridDots)');
+    svg.appendChild(bg);
+  }
 
   for (const a of level.arrows) {
     if (!remaining.has(a.id)) continue;
@@ -1214,18 +1377,24 @@ function animateExit(a, groupEl, onDone) {
 // Distance (en cases, fraction comprise) que la tête de la flèche peut
 // parcourir dans sa direction de sortie avant de toucher le premier
 // obstacle (une autre flèche encore en jeu). S'arrête juste avant d'entrer
-// dans la case qui bloque, comme si elle butait dessus.
+// dans la case qui bloque, comme si elle butait dessus. Sur un niveau bonus
+// en forme spéciale, un trou/une marge vide est traversé sans compter comme
+// obstacle (même règle que la sortie normale) : la distance reste la vraie
+// distance physique jusqu'au blocage.
 function blockedTravelSteps(arrow) {
-  const { rows, cols } = level.grid;
+  const { rows, cols, mask } = level.grid;
+  const [dr, dc] = DIRS[arrow.direction];
   const head = arrow.path[arrow.headIndex];
-  const cells = rayCells(head, arrow.direction, rows, cols);
-  for (let i = 0; i < cells.length; i++) {
-    const [r, c] = cells[i];
-    if (isCellOccupied(r, c, arrow.id)) return i + 0.25;
+  let r = head[0] + dr, c = head[1] + dc, steps = 0;
+  while (r >= 0 && r < rows && c >= 0 && c < cols) {
+    steps++;
+    const active = !mask || mask[r * cols + c] === 1;
+    if (active && isCellOccupied(r, c, arrow.id)) return steps - 1 + 0.25;
+    r += dr; c += dc;
   }
   // Filet de sécurité (ne devrait pas arriver puisque canExit() a renvoyé
   // false) : si rien ne bloque, on la laisse aller jusqu'au bord.
-  return cells.length;
+  return steps;
 }
 
 function isCellOccupied(r, c, excludeId) {

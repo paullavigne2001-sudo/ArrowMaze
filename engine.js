@@ -52,13 +52,20 @@ export function makeRng(seed) {
 }
 
 // Liste des cases traversées par le rayon de sortie d'une flèche, de sa
-// tête (exclue) jusqu'au bord de la grille (exclu).
-export function rayCells(head, direction, rows, cols) {
+// tête (exclue) jusqu'au bord de la grille (exclu). Le rayon va TOUJOURS
+// jusqu'au vrai bord du rectangle englobant (le bord de l'écran) : si un
+// masque de forme est fourni (niveaux "bonus" en forme spéciale, voir plus
+// bas), les cases hors-forme sont transparentes — elles ne bloquent jamais
+// et ne déclenchent jamais de sortie anticipée, le rayon les traverse
+// simplement sans s'arrêter. Seules les vraies cases de la figure comptent
+// pour savoir si le passage est libre. Sans masque (niveaux classiques),
+// c'est exactement le comportement d'origine.
+export function rayCells(head, direction, rows, cols, mask = null) {
   const [dr, dc] = DIRS[direction];
   const cells = [];
   let r = head[0] + dr, c = head[1] + dc;
   while (inBounds(r, c, rows, cols)) {
-    cells.push([r, c]);
+    if (!mask || mask[r * cols + c] === 1) cells.push([r, c]);
     r += dr; c += dc;
   }
   return cells;
@@ -73,13 +80,13 @@ export function cellToArrowMap(arrows) {
 // Dépendances complètes : une flèche dépend de TOUTES les flèches présentes
 // sur son rayon de sortie (pas seulement la première rencontrée — c'est
 // précisément le bug corrigé lors du passage de V6.x à V7.0).
-export function calculateDependencies(arrows, rows, cols) {
+export function calculateDependencies(arrows, rows, cols, mask = null) {
   const map = cellToArrowMap(arrows);
   const deps = new Map(arrows.map(a => [a.id, new Set()]));
   for (const a of arrows) {
     if (a.headIndex == null || !a.direction) continue;
     const head = a.path[a.headIndex];
-    for (const p of rayCells(head, a.direction, rows, cols)) {
+    for (const p of rayCells(head, a.direction, rows, cols, mask)) {
       const other = map.get(key(...p));
       if (other != null && other !== a.id) deps.get(a.id).add(other);
     }
@@ -120,7 +127,7 @@ export function solveDependencies(deps) {
 // flèches encore présentes sur le plateau (`remainingIds`). C'est la
 // fonction utilisée par le jeu à chaque clic du joueur.
 export function canExit(level, arrowId, remainingIds) {
-  const { rows, cols } = level.grid;
+  const { rows, cols, mask } = level.grid;
   const arrow = level.arrows.find(a => a.id === arrowId);
   if (!arrow) return false;
   const map = new Map();
@@ -130,7 +137,7 @@ export function canExit(level, arrowId, remainingIds) {
     for (const p of a.path) map.set(key(...p), id);
   }
   const head = arrow.path[arrow.headIndex];
-  for (const p of rayCells(head, arrow.direction, rows, cols)) {
+  for (const p of rayCells(head, arrow.direction, rows, cols, mask)) {
     if (map.has(key(...p))) return false;
   }
   return true;
@@ -138,7 +145,7 @@ export function canExit(level, arrowId, remainingIds) {
 
 export function validateGeometry(level) {
   const errors = [];
-  const { rows, cols } = level.grid;
+  const { rows, cols, mask } = level.grid;
   const occupied = new Map();
   for (const a of level.arrows) {
     if (!Array.isArray(a.path) || a.path.length < 1) {
@@ -148,6 +155,7 @@ export function validateGeometry(level) {
     for (let i = 0; i < a.path.length; i++) {
       const [r, c] = a.path[i];
       if (!inBounds(r, c, rows, cols)) errors.push(`Flèche ${a.id}: [${r},${c}] hors grille.`);
+      else if (mask && mask[r * cols + c] !== 1) errors.push(`Flèche ${a.id}: [${r},${c}] hors de la forme.`);
       const k = key(r, c);
       if (occupied.has(k)) errors.push(`Collision [${r},${c}].`);
       else occupied.set(k, a.id);
@@ -157,7 +165,8 @@ export function validateGeometry(level) {
       }
     }
   }
-  return { valid: errors.length === 0 && occupied.size === rows * cols, errors, coveredCells: occupied.size };
+  const expectedCells = mask ? mask.reduce((a, v) => a + v, 0) : rows * cols;
+  return { valid: errors.length === 0 && occupied.size === expectedCells, errors, coveredCells: occupied.size };
 }
 
 // ----------------------------------------------------------------------------
@@ -172,35 +181,38 @@ export function validateGeometry(level) {
 // avec la pointe.
 // ----------------------------------------------------------------------------
 
-function rayClearOnion(r, c, dir, owner, idx, rows, cols) {
+function rayClearOnion(r, c, dir, owner, idx, rows, cols, mask) {
   const [dr, dc] = DIRS[dir];
   let rr = r + dr, cc = c + dc;
   while (inBounds(rr, cc, rows, cols)) {
-    if (owner[idx(rr, cc)] === -1) return false;
+    const active = !mask || mask[idx(rr, cc)] === 1;
+    if (active && owner[idx(rr, cc)] === -1) return false;
     rr += dr; cc += dc;
   }
   return true;
 }
 
-function computeOnionFrontier(owner, idx, rows, cols) {
+function computeOnionFrontier(owner, idx, rows, cols, mask) {
   const list = [];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
+      if (mask && mask[idx(r, c)] !== 1) continue;
       if (owner[idx(r, c)] !== -1) continue;
       for (const dir of DIR_NAMES) {
-        if (rayClearOnion(r, c, dir, owner, idx, rows, cols)) list.push({ r, c, dir });
+        if (rayClearOnion(r, c, dir, owner, idx, rows, cols, mask)) list.push({ r, c, dir });
       }
     }
   }
   return list;
 }
 
-function countFreeNeighborsOnion(r, c, owner, idx, rows, cols, used) {
+function countFreeNeighborsOnion(r, c, owner, idx, rows, cols, used, mask) {
   let n = 0;
   for (const dir of DIR_NAMES) {
     const [dr, dc] = DIRS[dir];
     const nr = r + dr, nc = c + dc;
     if (!inBounds(nr, nc, rows, cols)) continue;
+    if (mask && mask[idx(nr, nc)] !== 1) continue;
     if (owner[idx(nr, nc)] !== -1) continue;
     if (used.has(idx(nr, nc))) continue;
     n++;
@@ -208,14 +220,15 @@ function countFreeNeighborsOnion(r, c, owner, idx, rows, cols, used) {
   return n;
 }
 
-function growArrowBody(hr, hc, dir, targetLen, owner, idx, rows, cols, rng) {
+function growArrowBody(hr, hc, dir, targetLen, owner, idx, rows, cols, rng, mask) {
   const path = [[hr, hc]];
   const used = new Set([idx(hr, hc)]);
   if (targetLen <= 1) return path;
 
   const [odr, odc] = DIRS[opposite(dir)];
   const nr0 = hr + odr, nc0 = hc + odc;
-  if (!inBounds(nr0, nc0, rows, cols) || owner[idx(nr0, nc0)] !== -1) {
+  const active0 = inBounds(nr0, nc0, rows, cols) && (!mask || mask[idx(nr0, nc0)] === 1);
+  if (!active0 || owner[idx(nr0, nc0)] !== -1) {
     return path; // pas d'extension possible sans casser l'alignement
   }
   path.push([nr0, nc0]);
@@ -228,9 +241,10 @@ function growArrowBody(hr, hc, dir, targetLen, owner, idx, rows, cols, rng) {
       const [dr, dc] = DIRS[d];
       const nr = cur[0] + dr, nc = cur[1] + dc;
       if (!inBounds(nr, nc, rows, cols)) continue;
+      if (mask && mask[idx(nr, nc)] !== 1) continue;
       if (owner[idx(nr, nc)] !== -1) continue;
       if (used.has(idx(nr, nc))) continue;
-      const freedom = countFreeNeighborsOnion(nr, nc, owner, idx, rows, cols, used);
+      const freedom = countFreeNeighborsOnion(nr, nc, owner, idx, rows, cols, used, mask);
       candidates.push({ nr, nc, freedom });
     }
     if (!candidates.length) break;
@@ -245,9 +259,9 @@ function growArrowBody(hr, hc, dir, targetLen, owner, idx, rows, cols, rng) {
   return path;
 }
 
-export function buildLevelOnion(rows, cols, minLen, maxLen, rng) {
-  const N = rows * cols;
-  const owner = new Int32Array(N).fill(-1);
+export function buildLevelOnion(rows, cols, minLen, maxLen, rng, mask = null) {
+  const N = mask ? mask.reduce((a, v) => a + v, 0) : rows * cols;
+  const owner = new Int32Array(rows * cols).fill(-1);
   const idx = (r, c) => r * cols + c;
   const arrows = [];
   const arrowsById = new Map();
@@ -264,6 +278,7 @@ export function buildLevelOnion(rows, cols, minLen, maxLen, rng) {
       const [dr, dc] = DIRS[d];
       const nr = r + dr, nc = c + dc;
       if (!inBounds(nr, nc, rows, cols)) continue;
+      if (mask && mask[idx(nr, nc)] !== 1) continue;
       const ownerId = owner[idx(nr, nc)];
       if (ownerId === -1) continue;
       const arrow = arrowsById.get(ownerId);
@@ -287,6 +302,7 @@ export function buildLevelOnion(rows, cols, minLen, maxLen, rng) {
       const [dr, dc] = DIRS[d];
       const nr = r + dr, nc = c + dc;
       if (!inBounds(nr, nc, rows, cols)) continue;
+      if (mask && mask[idx(nr, nc)] !== 1) continue;
       const ownerId = owner[idx(nr, nc)];
       if (ownerId === -1) continue;
       const arrow = arrowsById.get(ownerId);
@@ -310,13 +326,14 @@ export function buildLevelOnion(rows, cols, minLen, maxLen, rng) {
     guard++;
     if (guard > N * 3) return null;
 
-    const frontier = computeOnionFrontier(owner, idx, rows, cols);
+    const frontier = computeOnionFrontier(owner, idx, rows, cols, mask);
     if (!frontier.length) return null;
 
     const extendable = frontier.filter(f => {
       const [odr, odc] = DIRS[opposite(f.dir)];
       const nr = f.r + odr, nc = f.c + odc;
-      return inBounds(nr, nc, rows, cols) && owner[idx(nr, nc)] === -1;
+      const active = inBounds(nr, nc, rows, cols) && (!mask || mask[idx(nr, nc)] === 1);
+      return active && owner[idx(nr, nc)] === -1;
     });
 
     if (extendable.length) {
@@ -324,7 +341,7 @@ export function buildLevelOnion(rows, cols, minLen, maxLen, rng) {
       const { r: hr, c: hc, dir } = pick;
       const remainingCells = N - assignedCount;
       const target = Math.max(2, Math.min(remainingCells, rng.int(minLen, maxLen)));
-      const path = growArrowBody(hr, hc, dir, target, owner, idx, rows, cols, rng);
+      const path = growArrowBody(hr, hc, dir, target, owner, idx, rows, cols, rng, mask);
 
       if (path.length < 2) return null; // ne devrait jamais arriver (garde-fou)
 
@@ -344,6 +361,7 @@ export function buildLevelOnion(rows, cols, minLen, maxLen, rng) {
         progress = false;
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
+            if (mask && mask[idx(r, c)] !== 1) continue;
             if (owner[idx(r, c)] !== -1) continue;
             if (attachToNeighborTail(r, c)) { assignedCount++; progress = true; }
           }
@@ -355,6 +373,7 @@ export function buildLevelOnion(rows, cols, minLen, maxLen, rng) {
       let repaired = false;
       for (let r = 0; r < rows && !repaired; r++) {
         for (let c = 0; c < cols && !repaired; c++) {
+          if (mask && mask[idx(r, c)] !== 1) continue;
           if (owner[idx(r, c)] !== -1) continue;
           if (repairOrphan(r, c)) repaired = true;
         }
@@ -365,14 +384,20 @@ export function buildLevelOnion(rows, cols, minLen, maxLen, rng) {
   return arrows;
 }
 
-// Génère un niveau complet (grille 40x40, 100% de couverture). `fast: true`
-// (utilisé par le jeu) saute la recherche de score de difficulté et se
-// contente de la première construction valide — nettement plus rapide,
-// la solvabilité étant de toute façon garantie par construction.
+// Génère un niveau complet. `fast: true` (utilisé par le jeu) saute la
+// recherche de score de difficulté et se contente de la première
+// construction valide — nettement plus rapide, la solvabilité étant de
+// toute façon garantie par construction.
+//
+// `options.mask` (optionnel) : Uint8Array/array de rows*cols (1 = case
+// jouable, 0 = case hors de la figure) pour un niveau "bonus" en forme
+// spéciale au lieu d'un rectangle plein. Voir parseShapeMask ci-dessous
+// pour construire ce masque à partir du format texte "#nom\n0101...".
 export function generateLevel(options = {}) {
   const rows = options.rows ?? 40;
   const cols = options.cols ?? 40;
-  const totalCells = rows * cols;
+  const mask = options.mask ?? null;
+  const totalCells = mask ? mask.reduce((a, v) => a + v, 0) : rows * cols;
 
   const requestedArrows = Math.max(20, Number(options.arrows ?? 60));
   const avgLen = totalCells / requestedArrows;
@@ -384,10 +409,10 @@ export function generateLevel(options = {}) {
 
   for (let attempt = 0; attempt < attempts; attempt++) {
     const rng = makeRng((baseSeed + Math.imul(attempt + 1, 0x9E3779B9)) >>> 0);
-    const arrows = buildLevelOnion(rows, cols, minLen, maxLen, rng);
+    const arrows = buildLevelOnion(rows, cols, minLen, maxLen, rng, mask);
     if (!arrows) continue;
 
-    const deps = calculateDependencies(arrows, rows, cols);
+    const deps = calculateDependencies(arrows, rows, cols, mask);
     if (hasCycle(deps)) continue; // garde-fou (ne devrait jamais arriver)
 
     const solution = solveDependencies(deps);
@@ -395,11 +420,35 @@ export function generateLevel(options = {}) {
 
     return {
       id: options.id ?? 1,
-      grid: { rows, cols, coverage: '100%' },
+      grid: mask
+        ? { rows, cols, mask, coverage: `${totalCells}/${rows * cols}` }
+        : { rows, cols, coverage: '100%' },
       arrows,
       solution
     };
   }
 
   throw new Error(`Impossible de générer un niveau après ${attempts} tentatives.`);
+}
+
+// Convertit le format texte utilisé par l'éditeur de formes ("#nom" suivi
+// de lignes de 0/1, une ligne = une rangée) en { name, rows, cols, mask }
+// prêt à passer à generateLevel({ mask, ... }).
+export function parseShapeMask(text) {
+  const lines = text.split('\n').map(l => l.trimEnd());
+  let name = 'forme';
+  const gridLines = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (trimmed.startsWith('#')) { name = trimmed.slice(1).trim() || name; continue; }
+    gridLines.push(trimmed);
+  }
+  const rows = gridLines.length;
+  const cols = rows ? Math.max(...gridLines.map(l => l.length)) : 0;
+  const mask = new Uint8Array(rows * cols);
+  gridLines.forEach((line, r) => {
+    for (let c = 0; c < cols; c++) mask[r * cols + c] = line[c] === '1' ? 1 : 0;
+  });
+  return { name, rows, cols, mask };
 }
