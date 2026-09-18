@@ -1115,33 +1115,9 @@ function grantLives() {
 }
 
 // Retour haptique léger, activable/désactivable via Paramètres → Vibration.
-// DIAGNOSTIC TEMPORAIRE : affiche l'état réel de l'API dans une bannière
-// flottante, pour voir directement sur le téléphone ce qui se passe (pas
-// d'outils de développement disponibles sur mobile). À retirer une fois le
-// problème de vibration résolu (voir aussi #vibrateDiag dans le CSS/HTML).
-function showDiag(text) {
-  let el = document.getElementById('vibrateDiag');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'vibrateDiag';
-    el.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:9999;' +
-      'background:#000;color:#0f0;font:12px ui-monospace,monospace;padding:8px 10px;' +
-      'border-radius:8px;border:1px solid #0f0;white-space:pre-wrap;pointer-events:none';
-    document.body.appendChild(el);
-  }
-  el.textContent = text;
-}
 function vibrate(pattern) {
-  if (localStorage.getItem('am_vibration') === 'off') {
-    showDiag('[diag] réglage Vibration = OFF dans les Paramètres du jeu');
-    return;
-  }
-  if (!navigator.vibrate) {
-    showDiag('[diag] navigator.vibrate est indisponible sur ce navigateur/WebView');
-    return;
-  }
-  const ok = navigator.vibrate(pattern);
-  showDiag(`[diag] navigator.vibrate(${JSON.stringify(pattern)}) -> ${ok}`);
+  if (localStorage.getItem('am_vibration') === 'off') return;
+  if (navigator.vibrate) navigator.vibrate(pattern);
 }
 
 function pathToPoints(path) {
