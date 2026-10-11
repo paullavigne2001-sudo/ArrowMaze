@@ -308,15 +308,41 @@ export function buildLevelOnion(rows, cols, minLen, maxLen, rng, mask = null) {
       const arrow = arrowsById.get(ownerId);
       const i = arrow.path.findIndex(([pr, pc]) => pr === nr && pc === nc);
       if (i < 1) continue; // case introuvable, ou c'est la tête (intouchable)
-      for (let k = arrow.path.length - 1; k > i; k--) {
-        const [fr, fc] = arrow.path[k];
-        owner[idx(fr, fc)] = -1;
-        arrow.path.pop();
-        assignedCount--;
-      }
+      // On détache la queue F (cases après le point de contact), on y
+      // rattache l'orpheline, puis on tente de redonner vie à F comme une
+      // flèche à part entière (tête à l'une de ses deux extrémités, avec
+      // un rayon de sortie dégagé) au lieu de la laisser en cases libres :
+      // c'est ce qui évite que les orphelines "voyagent" sans fin sur les
+      // formes à couloirs étroits (diagonales fines, spirales...).
+      const F = arrow.path.splice(i + 1);
+      for (const [fr, fc] of F) owner[idx(fr, fc)] = -1;
+      assignedCount -= F.length;
       arrow.path.push([r, c]);
       owner[idx(r, c)] = ownerId;
       assignedCount++;
+      if (F.length >= 2) {
+        const options = [];
+        const last = F.length - 1;
+        // tête en bout de F, corps vers l'autre extrémité
+        options.push({ path: F.slice().reverse(), from: F[last - 1], head: F[last] });
+        // tête au début de F (côté point de contact), corps vers la fin
+        options.push({ path: F.slice(), from: F[1], head: F[0] });
+        for (const o of rng.shuffle(options)) {
+          const dr2 = o.head[0] - o.from[0], dc2 = o.head[1] - o.from[1];
+          const dirName = DIR_NAMES.find(n => DIRS[n][0] === dr2 && DIRS[n][1] === dc2);
+          if (!dirName) continue;
+          const newId = nextId;
+          for (const [pr, pc] of o.path) owner[idx(pr, pc)] = newId;
+          if (rayClearOnion(o.head[0], o.head[1], dirName, owner, idx, rows, cols, mask)) {
+            const b = { id: newId, path: o.path, headIndex: 0, direction: dirName };
+            arrows.push(b); arrowsById.set(newId, b);
+            assignedCount += o.path.length;
+            nextId++;
+            break;
+          }
+          for (const [pr, pc] of o.path) owner[idx(pr, pc)] = -1;
+        }
+      }
       return true;
     }
     return false;
