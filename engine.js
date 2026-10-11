@@ -165,6 +165,9 @@ export function validateGeometry(level) {
       }
     }
   }
+  for (const a of level.arrows) {
+    if (a.path && a.path.length && rayCrossesOwnBody(a, rows, cols, mask)) errors.push(`Flèche ${a.id}: pointe vers son propre corps.`);
+  }
   const expectedCells = mask ? mask.reduce((a, v) => a + v, 0) : rows * cols;
   return { valid: errors.length === 0 && occupied.size === expectedCells, errors, coveredCells: occupied.size };
 }
@@ -259,6 +262,28 @@ function growArrowBody(hr, hc, dir, targetLen, owner, idx, rows, cols, rng, mask
   return path;
 }
 
+
+// Vrai si la case (r,c) se trouve sur le rayon de sortie de `arrow` (de sa
+// tête jusqu'au bord). Une flèche ne doit jamais pointer vers son propre
+// corps : on refuse donc d'y ajouter une case de cette façon.
+function onOwnRay(arrow, r, c, rows, cols) {
+  const [dr, dc] = DIRS[arrow.direction];
+  let rr = arrow.path[arrow.headIndex][0] + dr, cc = arrow.path[arrow.headIndex][1] + dc;
+  while (inBounds(rr, cc, rows, cols)) {
+    if (rr === r && cc === c) return true;
+    rr += dr; cc += dc;
+  }
+  return false;
+}
+
+function rayCrossesOwnBody(arrow, rows, cols, mask) {
+  const own = new Set(arrow.path.map(([r, c]) => key(r, c)));
+  for (const p of rayCells(arrow.path[arrow.headIndex], arrow.direction, rows, cols, mask)) {
+    if (own.has(key(...p))) return true;
+  }
+  return false;
+}
+
 export function buildLevelOnion(rows, cols, minLen, maxLen, rng, mask = null) {
   const N = mask ? mask.reduce((a, v) => a + v, 0) : rows * cols;
   const owner = new Int32Array(rows * cols).fill(-1);
@@ -284,6 +309,7 @@ export function buildLevelOnion(rows, cols, minLen, maxLen, rng, mask = null) {
       const arrow = arrowsById.get(ownerId);
       const [tr, tc] = arrow.path[arrow.path.length - 1];
       if (tr !== nr || tc !== nc) continue; // il faut prolonger depuis la queue exacte
+      if (onOwnRay(arrow, r, c, rows, cols)) continue; // jamais sur son propre rayon
       arrow.path.push([r, c]);
       owner[idx(r, c)] = ownerId;
       return true;
@@ -308,6 +334,7 @@ export function buildLevelOnion(rows, cols, minLen, maxLen, rng, mask = null) {
       const arrow = arrowsById.get(ownerId);
       const i = arrow.path.findIndex(([pr, pc]) => pr === nr && pc === nc);
       if (i < 1) continue; // case introuvable, ou c'est la tête (intouchable)
+      if (onOwnRay(arrow, r, c, rows, cols)) continue; // jamais sur son propre rayon
       // On détache la queue F (cases après le point de contact), on y
       // rattache l'orpheline, puis on tente de redonner vie à F comme une
       // flèche à part entière (tête à l'une de ses deux extrémités, avec
@@ -333,8 +360,10 @@ export function buildLevelOnion(rows, cols, minLen, maxLen, rng, mask = null) {
           if (!dirName) continue;
           const newId = nextId;
           for (const [pr, pc] of o.path) owner[idx(pr, pc)] = newId;
-          if (rayClearOnion(o.head[0], o.head[1], dirName, owner, idx, rows, cols, mask)) {
-            const b = { id: newId, path: o.path, headIndex: 0, direction: dirName };
+          const cand = { id: newId, path: o.path, headIndex: 0, direction: dirName };
+          if (rayClearOnion(o.head[0], o.head[1], dirName, owner, idx, rows, cols, mask)
+              && !rayCrossesOwnBody(cand, rows, cols, mask)) {
+            const b = cand;
             arrows.push(b); arrowsById.set(newId, b);
             assignedCount += o.path.length;
             nextId++;
@@ -438,6 +467,7 @@ export function generateLevel(options = {}) {
     const arrows = buildLevelOnion(rows, cols, minLen, maxLen, rng, mask);
     if (!arrows) continue;
 
+    if (arrows.some(a => rayCrossesOwnBody(a, rows, cols, mask))) continue; // flèche pointant vers elle-même
     const deps = calculateDependencies(arrows, rows, cols, mask);
     if (hasCycle(deps)) continue; // garde-fou (ne devrait jamais arriver)
 
